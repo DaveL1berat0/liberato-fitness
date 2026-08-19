@@ -5852,6 +5852,274 @@ try{ APP_VERSION="v39"; APP_BUILD="2026-08-19";
   var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
 }catch(e){}
 
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V40 — FLUJO INTELIGENTE: OBJETIVO → RECOMENDACIÓN IA → CONFIRMAR → GENERAR
+   (19-ago-2026) Atiende los 4 puntos de Dave.
+   pt3: la dieta/rutina se BLOQUEAN hasta confirmar objetivo.
+   pt1: la IA analiza tus datos y recomienda peso/composición (vs tu meta).
+   pt2: borrar/regenerar dieta manteniendo preferencias.
+   pt4: persistir S.user (objetivo, metas, prefs, recomendación) en pf1x.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v40) return; window.__v40=true;
+  if(!S.user) S.user={};
+
+  /* ---- (pt4) PERSISTIR S.user en pf1x (antes NO se guardaba: metas/altura se perdían) ---- */
+  try{
+    var x=JSON.parse(localStorage.getItem('pf1x')||'null');
+    if(x && x.user && typeof x.user==='object'){
+      ['goalType','targetWeight','targetBF','height','goalConfirmed','foodPrefs','aiRec'].forEach(function(k){
+        if(x.user[k]!==undefined) S.user[k]=x.user[k];
+      });
+    }
+  }catch(e){}
+  (function(){
+    var _s=Store.save;
+    Store.save=function(){
+      var r=_s.apply(this,arguments);
+      try{
+        var cur=JSON.parse(localStorage.getItem('pf1x')||'{}');
+        cur.user={
+          goalType:S.user.goalType, targetWeight:S.user.targetWeight, targetBF:S.user.targetBF,
+          height:S.user.height, goalConfirmed:!!S.user.goalConfirmed,
+          foodPrefs:S.user.foodPrefs||'', aiRec:S.user.aiRec||null
+        };
+        localStorage.setItem('pf1x',JSON.stringify(cur));
+      }catch(e){}
+      return r;
+    };
+  })();
+
+  /* ---- (pt1) RECOMENDACIÓN DE IA sobre peso/composición ---- */
+  window.aiGoalRecommend=async function(){
+    if(!_AKEY){ notif('Configura tu API key','Toca \u2699 en el Coach AI','&#x1F511;'); try{openApiKeySettings();}catch(e){} return; }
+    var btn=document.getElementById('v40-airec-btn');
+    if(btn){ btn.disabled=true; btn.dataset.t=btn.innerHTML; btn.innerHTML='Analizando\u2026'; }
+    try{
+      var u=S.user||{}, m=S.metrics||{};
+      var datos = (m.weight>0)
+        ? ('peso actual '+m.weight+'kg, grasa '+(m.bodyFat||'?')+'%, altura '+(u.height||178)+'cm')
+        : ('(sin peso/grasa registrados aún), altura '+(u.height||178)+'cm');
+      var metaTxt = u.targetWeight ? ('El usuario puso como meta '+u.targetWeight+'kg.') : ('El usuario no fijó un peso; usa su objetivo general.');
+      var prompt="Eres coach de composicion corporal basado en evidencia. Datos de Dave: "+datos+". "
+        +"Objetivo elegido: "+(u.goalType||'Recomposición')+". "+metaTxt+" "
+        +(window._EVID||'')+" "
+        +"Analiza si la meta es coherente con el objetivo; recomienda un rango de peso y % de grasa mas apropiado y explica por que en 1-2 frases. "
+        +"Si faltan datos (sin peso), dilo y da un rango orientativo por altura y objetivo. "
+        +'Responde SOLO JSON sin markdown: {"recWeightMin":N,"recWeightMax":N,"recBF":"N-N%","coherente":true|false,"rationale":"1-2 frases"}';
+      var text=await _aiCall(prompt, 900);
+      if(!text) return;
+      var jm=text.match(/\{[\s\S]*\}/); if(!jm) throw new Error('La IA no devolvió recomendación');
+      var j=JSON.parse(jm[0]);
+      S.user.aiRec={
+        min:j.recWeightMin, max:j.recWeightMax, bf:j.recBF,
+        coherente:j.coherente, rationale:j.rationale, at:new Date().toISOString()
+      };
+      Store.save();
+      renderBrief();
+      notif('Recomendación lista','La IA analizó tu objetivo','\u{1F916}');
+    }catch(e){ console.error('[aiGoalRecommend]',e); notif('Error IA',(e&&e.message)||'No se pudo recomendar','\u26A0');
+      if(btn){ btn.disabled=false; if(btn.dataset.t) btn.innerHTML=btn.dataset.t; }
+    }
+  };
+
+  window.setTargetWeight=function(v){
+    var n=parseFloat(v); if(!isNaN(n)&&n>0){ S.user.targetWeight=n; S.user.goalConfirmed=false; Store.save(); }
+  };
+  window.confirmGoal=function(){
+    S.user.goalConfirmed=true; Store.save(); renderBrief();
+    var ne=document.getElementById('s-nutrition'); if(ne){ne._r=0;renderNutrition();}
+    var te=document.getElementById('s-training'); if(te){te._r=0;rTrain();}
+    notif('Objetivo confirmado','Ya puedes generar dieta y rutina','\u2713');
+  };
+  window.reopenGoal=function(){ S.user.goalConfirmed=false; Store.save(); renderBrief();
+    try{document.getElementById('s-brief').scrollIntoView({behavior:'smooth'});}catch(e){} };
+})();
+
+/* ---- (pt1+pt3) TARJETA HERO con flujo de objetivo completo ---- */
+(function(){
+  var css=document.createElement('style'); css.textContent=
+   '.v40-tw{width:120px;text-align:center;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.14);'
+  +'border-radius:12px;padding:10px;color:var(--t1);font-size:16px;font-weight:700;-webkit-appearance:none;'
+  +'font-family:-apple-system,BlinkMacSystemFont,sans-serif;}'
+  +'.v40-airec-btn{margin-top:14px;background:rgba(139,92,255,.12);border:1px solid rgba(139,92,255,.4);'
+  +'color:#c9b8ff;border-radius:12px;padding:11px 18px;font-size:12.5px;font-weight:700;cursor:pointer;'
+  +'font-family:-apple-system,BlinkMacSystemFont,sans-serif;}'
+  +'.v40-rec{margin-top:14px;text-align:left;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);'
+  +'border-radius:14px;padding:14px;}'
+  +'.v40-rec-row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;}'
+  +'.v40-rec-k{font-size:10px;color:var(--t3);font-family:var(--mono);letter-spacing:1px;}'
+  +'.v40-rec-v{font-size:15px;font-weight:800;color:var(--t1);}'
+  +'.v40-rec-v.ai{color:#c9b8ff;}'
+  +'.v40-rec-why{font-size:11.5px;color:var(--t2);line-height:1.5;margin-top:6px;'
+  +'padding-top:10px;border-top:1px solid rgba(255,255,255,.06);}'
+  +'.v40-badge{display:inline-block;font-size:9px;padding:2px 8px;border-radius:999px;font-weight:700;letter-spacing:.5px;}'
+  +'.v40-badge.ok{background:rgba(0,255,136,.14);color:#33e08a;} .v40-badge.no{background:rgba(255,109,0,.16);color:#ffa64d;}'
+  +'.v40-cta{width:100%;margin-top:14px;background:linear-gradient(120deg,#8b5cff,#ff2d95,#ff7a1a);color:#fff;'
+  +'border:none;border-radius:14px;padding:14px;font-size:13px;font-weight:800;cursor:pointer;'
+  +'box-shadow:0 10px 26px rgba(255,45,149,.32);font-family:-apple-system,BlinkMacSystemFont,sans-serif;}'
+  +'.v40-conf{margin-top:14px;background:rgba(0,255,136,.06);border:1px solid rgba(0,255,136,.22);'
+  +'border-radius:14px;padding:12px 14px;font-size:12px;color:var(--t2);}'
+  +'.v40-link{background:none;border:none;color:#c9b8ff;font-size:11px;cursor:pointer;text-decoration:underline;margin-top:8px;font-family:inherit;}';
+  document.head.appendChild(css);
+
+  var _rb=renderBrief; /* del V39, por si acaso */
+  renderBrief=function(){
+    var el=document.getElementById('s-brief'); if(!el) return;
+    var u=S.user||{}, hrs=new Date().getHours();
+    var saludo=hrs<12?'Buenos días':hrs<19?'Buenas tardes':'Buenas noches';
+    var gt=u.goalType||'Recomposición';
+    var confirmed=!!u.goalConfirmed;
+    var upd=_fmtFecha(S.updatedAt);
+
+    var H=['<div class="v39-hero">'];
+    H.push('<div class="v39-hi">'+saludo+', <span>Dave</span></div>');
+
+    if(confirmed){
+      /* estado confirmado: resumen compacto */
+      H.push('<div class="v39-sub">Objetivo confirmado. Genera tu dieta y rutina desde sus pestañas.</div>');
+      H.push('<div class="v40-conf" style="text-align:center;">');
+      H.push('<div style="font-size:15px;font-weight:800;color:var(--t1);">'+gt+'</div>');
+      H.push('<div style="font-size:12px;color:var(--t3);margin-top:3px;">Meta: '+(u.targetWeight||78)+' kg · '+(u.targetBF||10)+'% grasa</div>');
+      if(u.aiRec) H.push('<div style="font-size:11px;color:#c9b8ff;margin-top:4px;">IA recomienda: '+u.aiRec.min+'–'+u.aiRec.max+' kg'+(u.aiRec.bf?(' · '+u.aiRec.bf):'')+'</div>');
+      H.push('</div>');
+      H.push('<button class="v40-link" onclick="reopenGoal()">Cambiar objetivo</button>');
+    } else {
+      /* estado edición: pills + peso opcional + recomendación + confirmar */
+      H.push('<div class="v39-sub">Elige tu objetivo. La IA lo analiza y te recomienda antes de generar dieta y rutina.</div>');
+      H.push('<div class="v39-goal-lbl">MI OBJETIVO</div>');
+      H.push('<div class="v39-pills">'+(window.GOAL_TYPES||['Recomposición']).map(function(g){
+        return '<button class="v39-pill'+(g===gt?' on':'')+'" onclick="setGoalType(\''+g.replace(/'/g,"\\'")+'\')">'+g+'</button>';
+      }).join('')+'</div>');
+
+      H.push('<div class="v39-goal-lbl">PESO OBJETIVO (opcional)</div>');
+      H.push('<input class="v40-tw" type="number" inputmode="decimal" placeholder="ej: 78" value="'+(u.targetWeight||'')+'" '
+        +'onchange="setTargetWeight(this.value)"> <span style="color:var(--t3);font-size:12px;">kg</span>');
+
+      H.push('<div><button class="v40-airec-btn" id="v40-airec-btn" onclick="aiGoalRecommend()">\u{1F916} Ver recomendación de la IA</button></div>');
+
+      if(u.aiRec){
+        var r=u.aiRec;
+        H.push('<div class="v40-rec">');
+        H.push('<div class="v40-rec-row"><span class="v40-rec-k">MI OBJETIVO</span><span class="v40-rec-v">'+(u.targetWeight?(u.targetWeight+' kg'):(gt))+'</span></div>');
+        H.push('<div class="v40-rec-row"><span class="v40-rec-k">RECOMENDADO IA</span><span class="v40-rec-v ai">'+r.min+'–'+r.max+' kg'+(r.bf?(' · '+r.bf):'')+'</span></div>');
+        H.push('<div style="text-align:right;"><span class="v40-badge '+(r.coherente?'ok':'no')+'">'+(r.coherente?'TU META ES COHERENTE':'AJUSTE SUGERIDO')+'</span></div>');
+        if(r.rationale) H.push('<div class="v40-rec-why">'+String(r.rationale).replace(/</g,'&lt;')+'</div>');
+        H.push('</div>');
+      }
+
+      H.push('<button class="v40-cta" onclick="confirmGoal()">\u2713 Confirmar objetivo y desbloquear dieta + rutina</button>');
+    }
+
+    H.push('<div class="v39-upd">'+(upd?('Última actualización: '+upd):'Sin actualizaciones aún — registra tu primer progreso')+'</div>');
+    H.push('</div>');
+    el.innerHTML=H.join('');
+  };
+})();
+
+/* ---- (pt3) GATE: dieta/rutina bloqueadas hasta confirmar objetivo ---- */
+(function(){
+  function gate(el, tipo){
+    el.innerHTML='<div class="card"><div class="cl">'+tipo+'</div>'
+      +'<div class="v36-empty" style="margin-top:10px;">'
+      +'<h4>Primero define tu objetivo</h4>'
+      +'<p>La '+tipo.toLowerCase()+' se genera según tu objetivo (perder grasa, ganar músculo, recomposición…). '
+      +'Ve a <b>Inicio</b>, elige tu objetivo, mira la recomendación de la IA y confírmalo.</p>'
+      +'<button class="v36-gen" onclick="_gotoGoal()">Ir a definir mi objetivo</button>'
+      +'</div></div>';
+    el._r=1;
+  }
+  window._gotoGoal=function(){ try{document.getElementById('s-brief').scrollIntoView({behavior:'smooth',block:'start'});}catch(e){} };
+
+  var _rn=renderNutrition;
+  renderNutrition=function(){
+    var el=document.getElementById('s-nutrition');
+    if(el && !(S.user&&S.user.goalConfirmed)){ gate(el,'Dieta'); return; }
+    _rn.apply(this,arguments);
+    /* preferencias alimentarias persistentes + regenerar */
+    if(el && S.user&&S.user.goalConfirmed && !document.getElementById('v40-prefs')){
+      var d=document.createElement('div'); d.style.cssText='margin-top:12px;';
+      d.innerHTML='<div class="v39-goal-lbl" style="text-align:left;margin:0 0 6px;">PREFERENCIAS / ALERGIAS (opcional)</div>'
+        +'<input id="v40-prefs" placeholder="ej: no lácteos, me gusta el salmón, poco picante" value="'+((S.user.foodPrefs||'').replace(/"/g,'&quot;'))+'" '
+        +'onchange="S.user.foodPrefs=this.value;Store.save();" '
+        +'style="width:100%;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:11px;color:var(--t1);font-size:12.5px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;">';
+      el.appendChild(d);
+    }
+  };
+
+  var _rt=rTrain;
+  rTrain=function(){
+    var el=document.getElementById('s-training');
+    if(el && !(S.user&&S.user.goalConfirmed)){ gate(el,'Entrenamiento'); return; }
+    _rt.apply(this,arguments);
+  };
+})();
+
+/* ---- (pt2) DIETA por IA con preferencias guardadas ---- */
+async function aiFullDiet(){
+  if(!_AKEY){ notif('Configura tu API key','Toca \u2699 en el Coach AI','&#x1F511;'); try{openApiKeySettings();}catch(e){} return; }
+  if(!(S.user&&S.user.goalConfirmed)){ notif('Confirma tu objetivo','Ve a Inicio y confirma tu objetivo primero','\u26A0'); try{_gotoGoal();}catch(e){} return; }
+  var ld=document.createElement('div'); ld.id='v36-diet-load';
+  ld.style.cssText='position:fixed;inset:0;background:rgba(6,4,14,.92);z-index:800;display:flex;flex-direction:column;align-items:center;justify-content:center;';
+  ld.innerHTML="<div style='font-size:34px;margin-bottom:14px;'>\u2728</div><div style='font-size:13px;color:var(--accent,#ff2d95);font-family:var(--mono);letter-spacing:2px;'>GENERANDO DIETA...</div><div style='font-size:11px;color:var(--t3);margin-top:8px;'>Según tu objetivo y evidencia</div>";
+  document.body.appendChild(ld);
+  try{
+    var u=S.user||{}, m=S.metrics||{};
+    var perfil="objetivo: "+(u.goalType||'Recomposición')+". Meta "+(u.targetWeight||78)+"kg y "+(u.targetBF||10)+"% grasa, altura "+(u.height||178)+"cm"
+      +((m.weight>0)?(", peso actual "+m.weight+"kg y grasa "+(m.bodyFat||'?')+"%"):", (sin peso; usa la meta)");
+    var prefs=(u.foodPrefs&&u.foodPrefs.trim())?(" Preferencias/alergias del usuario a respetar: "+u.foodPrefs.trim()+"."):"";
+    var prompt="Eres nutricionista deportivo. Perfil: "+perfil+".\n"
+      +"Restricciones REALES: SIN gluten ni trigo (gastritis), aceite de oliva crudo, evitar exceso de carne roja, ayuno 12-16h, min 50g carbos post-entreno."+prefs+"\n"
+      +(window._EVID||'')+"\n"
+      +"Disena UN dia completo de comidas coherente con el objetivo. Calcula tu los targets diarios.\n"
+      +"Responde SOLO JSON valido sin markdown:\n"
+      +'{"targets":{"kcal":N,"p":N,"c":N,"f":N},"meals":{"breakfast":[{"name":"...","qty":N,"unit":"g","p":N,"c":N,"f":N,"kcal":N}],"lunch":[...],"snacks":[...],"dinner":[...]},"rules":["r1","r2","r3","r4","r5","r6"]}';
+    var text=await _aiCall(prompt, 2400);
+    if(!text) return;
+    var jm=text.match(/\{[\s\S]*\}/); if(!jm) throw new Error('La IA no devolvio JSON');
+    var parsed=JSON.parse(jm[0]); var meals=parsed.meals||{};
+    ['breakfast','lunch','dinner','snacks'].forEach(function(k){ if(!Array.isArray(meals[k])) meals[k]=[]; });
+    if(!meals.breakfast.length && !meals.lunch.length && !meals.dinner.length) throw new Error('Estructura de dieta invalida');
+    S.meals=meals;
+    var t=_calcTotals(S.meals);
+    S.nutrition.calories.current=t.k; S.nutrition.protein.current=t.p; S.nutrition.carbs.current=t.c; S.nutrition.fat.current=t.f;
+    if(parsed.targets){ var tg=parsed.targets;
+      if(tg.kcal)S.nutrition.calories.target=Math.round(tg.kcal); if(tg.p)S.nutrition.protein.target=Math.round(tg.p);
+      if(tg.c)S.nutrition.carbs.target=Math.round(tg.c); if(tg.f)S.nutrition.fat.target=Math.round(tg.f); }
+    if(Array.isArray(parsed.rules)&&parsed.rules.length) S.dietRules=parsed.rules;
+    Store.save();
+    var ne=document.getElementById('s-nutrition'); if(ne){ne._r=0;renderNutrition();}
+    notif('Dieta generada','Comidas, macros y reglas actualizados','\u2728');
+  }catch(e){ console.error('[aiFullDiet]',e); notif('Error IA',(e&&e.message)||'No se pudo generar','\u26A0'); }
+  finally{ var l=document.getElementById('v36-diet-load'); if(l) l.remove(); }
+}
+
+/* ---- RED DE SEGURIDAD DE ARRANQUE ----
+   El splash usa requestAnimationFrame; si la pestaña arranca en 2º plano
+   el rAF se estrangula, el splash no completa y render() nunca se dispara
+   (el fallback base solo oculta el splash). Forzamos el render si la
+   pantalla quedó vacía. Idempotente. */
+(function(){
+  function _ensure(){
+    try{
+      var b=document.getElementById('s-brief');
+      if(b && b.innerHTML.length<30 && typeof render==='function'){ render(); }
+      var sp=document.getElementById('splash');
+      if(sp && sp.style.display!=='none'){ sp.style.display='none'; window._splashDone=true; }
+    }catch(e){}
+  }
+  window.addEventListener('load', function(){ setTimeout(_ensure,1000); setTimeout(_ensure,2500); setTimeout(_ensure,4500); });
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) setTimeout(_ensure,200); });
+  setTimeout(_ensure, 1500);
+})();
+
+/* ---- versión ---- */
+try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
+  var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+}catch(e){}
+
 </script>
 
   <button id="ai-chat-btn" onclick="toggleChat()" title="Coach AI">&#x1F4AC;</button>
