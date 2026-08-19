@@ -1293,7 +1293,7 @@ function rGoals(){
   <div class="cl">Goal Simulator</div>
   <div style="font-size:12px;color:var(--t3);margin-bottom:16px;">Adjust variables to simulate timeline projection</div>
   ${[['Daily Calories','sc',1800,3500,2500,'kcal'],['Protein','sp',100,220,155,'g'],['Training Days/Wk','sv',1,7,5,'days']].map(([lb,id,mn,mx,v,u])=>`<div style="margin-bottom:14px;"><div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="font-size:11px;color:var(--t2);">${lb}</span><span style="font-size:11px;color:var(--cyan);font-family:var(--mono);" id="${id}-v">${v} ${u}</span></div><input type="range" min="${mn}" max="${mx}" value="${v}" style="width:100%;accent-color:var(--cyan);cursor:pointer;" oninput="document.getElementById('${id}-v').textContent=this.value+' ${u}';"></div>`).join('')}
-  <div class="air"><div class="ait">At current settings: Body fat target (10%) achievable in <strong style="color:var(--cyan);">~45 days</strong>. Lean mass target (+4kg) in <strong style="color:var(--cyan);">~90 days</strong>. Strategy: <strong style="color:var(--t1);">Lean Recomposition at +200–300 kcal surplus.</strong></div></div>
+  <div class="air"><div class="ait" id="brief-proj-txt">${(S.checkins&&S.checkins.length)?'Proyecci\u00f3n disponible con m\u00e1s check-ins. Pregunta al Coach AI por tu tendencia real.':'Registra tu peso y medidas reales para ver proyecciones. Aqu\u00ed no se inventan fechas ni cifras (Regla #1).'}</div></div>
 </div>`;
 }
 function showAddGoal(){
@@ -1453,18 +1453,11 @@ function renderBrief(){
           '<div class="brief-rlbl">Target</div>'+
           '<div class="brief-rtgt">78 kg &middot; 10% BF</div>'+
           '<div class="brief-rlbl" style="margin-top:8px;">Estimated Arrival</div>'+
-          '<div class="brief-eta">~45<span class="brief-etau">days</span></div>'+
+          '<div class="brief-eta">'+((S.checkins&&S.checkins.length)?'~45':'&mdash;')+'<span class="brief-etau">'+((S.checkins&&S.checkins.length)?'days':'sin datos')+'</span></div>'+
         '</div>'+
       '</div>'+
       '<div class="brief-ai-divider"></div>'+
-      '<div class="ait">Excellent progress, Dave. Body composition trending in the right direction &mdash; lean mass improving visibly in back and shoulder regions while waist circumference remains stable. Elimination of gluten significantly reduced inflammatory markers. <strong style="color:var(--t1)">Recommendation:</strong> Increase protein to 155&ndash;160g/day with whey isolate. Target 78kg at 10% BF achievable in <strong style="color:var(--cyan)">45&ndash;60 days</strong> at current trajectory.</div>'+
-      '<div style="margin-top:10px;">'+
-        '<span class="at ap">&uarr; Lean Mass</span>'+
-        '<span class="at ap">&darr; Inflammation</span>'+
-        '<span class="at ap">&darr; Body Fat</span>'+
-        '<span class="at ai2">+ Add Whey Isolate</span>'+
-        '<span class="at ai2">+ Ab Work Tue/Fri</span>'+
-      '</div>'+
+      '<div class="ait">'+((S.checkins&&S.checkins.length)?('An&#xE1;lisis basado en tus '+S.checkins.length+' check-in(s) reales. Reg&#xED;stralos desde &#x201C;Ingresar Nuevo Progreso&#x201D; y pregunta al Coach AI por tu tendencia.'):'A&#xFA;n no hay datos. Sube tu foto y registra tu peso y medidas reales para activar el an&#xE1;lisis del Coach AI &mdash; aqu&#xED; no se inventan cifras (Regla #1).')+'</div>'+
     '</div>';
 
   setTimeout(_showApiKeyBanner,200);
@@ -1473,16 +1466,24 @@ function renderBrief(){
 function renderBodyCol(){
   var m=S.metrics, el=document.getElementById("s-body");
   if(!el) return;
+  /* Delta real vs el check-in anterior (solo si hay historial); nada inventado (Regla #1) */
+  var _prev=(S.checkins&&S.checkins.length>1)?S.checkins[1]:null;
+  function _dlt(cur,key){
+    if(!_prev||_prev[key]==null||!cur) return ["",""];
+    var d=+(cur-_prev[key]).toFixed(1); if(!d) return ["= 0","pos"];
+    return [(d>0?"&uarr; ":"&darr; ")+Math.abs(d), (key==="weight"||key==="bodyFat"||key==="waist")?(d<0?"pos":"neg"):(d>0?"pos":"neg")];
+  }
+  var dW=_dlt(m.weight,"weight"), dBF=_dlt(m.bodyFat,"bodyFat"), dWa=_dlt(m.waist,"waist");
   var rows=[
-    ["WEIGHT",m.weight,"kg","&darr; 1.1","neg"],
-    ["BODY FAT",m.bodyFat,"%","&darr; 0.5%","pos"],
-    ["LEAN MASS",m.leanMass,"kg","&uarr; 0.3","pos"],
-    ["MUSCLE",m.muscleMass,"kg","&uarr; 0.5","pos"],
-    ["WATER",m.water,"%","&uarr; 1.2%","pos"],
-    ["BMI",m.bmi,"","&darr; 0.3","pos"],
-    ["BMR",m.bmr,"kcal","&uarr; 12","pos"],
-    ["SHOULDERS",m.shoulders,"cm","&uarr; 2.0","pos"],
-    ["WAIST",m.waist,"cm","&darr; 0.5","pos"]
+    ["WEIGHT",m.weight,"kg",dW[0],dW[1]],
+    ["BODY FAT",m.bodyFat,"%",dBF[0],dBF[1]],
+    ["LEAN MASS",m.leanMass,"kg","",""],
+    ["MUSCLE",m.muscleMass,"kg","",""],
+    ["WATER",m.water,"%","",""],
+    ["BMI",m.bmi,"","",""],
+    ["BMR",m.bmr,"kcal","",""],
+    ["SHOULDERS",m.shoulders,"cm","",""],
+    ["WAIST",m.waist,"cm",dWa[0],dWa[1]]
   ];
   var rh="";
   for(var i=0;i<rows.length;i++){
@@ -1490,9 +1491,9 @@ function renderBodyCol(){
     rh+='<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.035);">'+
         '<span style="font-size:9px;letter-spacing:2px;color:var(--t3);font-family:var(--mono);">'+r[0]+'</span>'+
         '<span style="display:flex;align-items:baseline;gap:3px;">'+
-          '<span style="font-size:15px;font-weight:700;color:var(--t1);font-variant-numeric:tabular-nums;">'+r[1]+'</span>'+
-          '<span style="font-size:8px;color:var(--t2);">'+r[2]+'</span>'+
-          '<span class="mdelta '+r[4]+'" style="font-size:9px;margin-left:4px;">'+r[3]+'</span>'+
+          '<span style="font-size:15px;font-weight:700;color:var(--t1);font-variant-numeric:tabular-nums;">'+(r[1]?r[1]:'&mdash;')+'</span>'+
+          '<span style="font-size:8px;color:var(--t2);">'+(r[1]?r[2]:'')+'</span>'+
+          (r[3]?('<span class="mdelta '+r[4]+'" style="font-size:9px;margin-left:4px;">'+r[3]+'</span>'):'')+
         '</span>'+
         '</div>';
   }
@@ -1530,8 +1531,7 @@ function renderBodyCol(){
         '<div class="cl" style="margin-bottom:10px;flex-shrink:0;">Key Metrics</div>'+
         '<div style="flex:1;">'+rh+'</div>'+
         '<div class="air" style="margin-top:12px;padding:10px 12px;flex-shrink:0;">'+
-          '<div class="ait" style="margin-bottom:8px;">Posterior chain confirmed. Shoulder width +2cm. BF &darr; without muscle loss.</div>'+
-          '<div><span class="at ap">&uarr; Back</span><span class="at ap">&uarr; Shoulders</span><span class="at ap">= Waist</span></div>'+
+          '<div class="ait" style="margin-bottom:8px;">'+((S.photos&&S.photos.main)?'Toca &#x201C;Escanear con IA&#x201D; para analizar tu foto. El an&#xE1;lisis se calcula de tu imagen; no se inventan cifras.':'Sube tu foto y registra tus medidas reales para activar el an&#xE1;lisis del Coach.')+'</div>'+
         '</div>'+
       '</div>'+
     '</div>';
@@ -4998,6 +4998,377 @@ var APP_BUILD="2026-08-17";
   var t=0, iv=setInterval(function(){ t++; if(swap()||t>40) clearInterval(iv); }, 300);
   window.addEventListener('load',function(){ setTimeout(swap,500); });
 })();
+
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V36 — DIETA/RUTINA POR IA · DATOS EN 0 · CHAT MÓVIL · PERSISTENCIA
+   Atiende los 5 puntos de Dave (19-ago-2026):
+   1. Chat del Coach: teclado/altura corregidos con VisualViewport.
+   2. Perfil nuevo empieza en 0 hasta subir foto + métricas (Regla #1).
+   3. Rutina asignada por IA según protocolo (fin de los datos fijos).
+   4. Dieta generada por IA (comidas + macros del Daily) con botón visible.
+   5. Dietary Rules dinámicas según la dieta/objetivos (no fijas).
+   Todo append-only: las últimas definiciones ganan.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v36) return; window.__v36=true;
+
+  /* ── (0) PERSISTENCIA localStorage de meals/customDays/reglas ──
+     El save base sólo guardaba métricas; en el celular (sin carpeta
+     conectada) la dieta y la rutina se perdían al recargar. */
+  try{
+    var KX='pf1x';
+    var _save=Store.save;
+    Store.save=function(){
+      try{ _save.apply(this,arguments); }catch(e){}
+      try{
+        localStorage.setItem(KX, JSON.stringify({
+          meals:S.meals, customDays:S.customDays,
+          dietRules:S.dietRules, customRules:S.customRules,
+          nutriTargets:{
+            cal:S.nutrition.calories.target, p:S.nutrition.protein.target,
+            c:S.nutrition.carbs.target,      f:S.nutrition.fat.target
+          }
+        }));
+      }catch(e){}
+    };
+    var x=JSON.parse(localStorage.getItem(KX)||'null');
+    if(x){
+      if(x.meals)      S.meals      = x.meals;
+      if(x.customDays) S.customDays = x.customDays;
+      if(x.dietRules)  S.dietRules  = x.dietRules;
+      if(x.customRules)S.customRules= x.customRules;
+      if(x.nutriTargets){
+        var t=x.nutriTargets;
+        if(t.cal) S.nutrition.calories.target=t.cal;
+        if(t.p)   S.nutrition.protein.target =t.p;
+        if(t.c)   S.nutrition.carbs.target   =t.c;
+        if(t.f)   S.nutrition.fat.target     =t.f;
+      }
+    }
+  }catch(e){ console.warn('[V36 persist]',e); }
+
+  /* ── (1/pt2) PERFIL NUEVO = TODO EN 0 (Regla #1) ──
+     Si no hay datos guardados (ni pf1 ni pf1x), arrancamos en 0:
+     nada inventado hasta que Dave suba su foto y mida de verdad. */
+  try{
+    var hasCore=false, hasExt=false;
+    try{ hasCore=!!localStorage.getItem('pf1'); }catch(e){}
+    try{ hasExt =!!localStorage.getItem('pf1x'); }catch(e){}
+    if(!hasCore && !hasExt){
+      var m=S.metrics; for(var k in m){ if(typeof m[k]==='number') m[k]=0; }
+      ['calories','protein','carbs','fat','water','creatine','omega3'].forEach(function(kk){
+        if(S.nutrition[kk]) S.nutrition[kk].current=0;
+      });
+      for(var r in S.recovery){ if(typeof S.recovery[r]==='number') S.recovery[r]=0; }
+      (S.goals||[]).forEach(function(g){ g.current=0; g.progress=0; });
+      S.checkins=[]; S.meals=null; S.customDays=null; S.dietRules=null;
+    }
+  }catch(e){ console.warn('[V36 reset]',e); }
+
+  /* ── (2/pt1) CHAT DEL COACH: teclado y altura nativos ──
+     El panel a 100dvh no se encogía con el teclado iOS: el input
+     quedaba tapado. Lo ajustamos al VisualViewport real. */
+  var css=document.createElement('style');
+  css.textContent=
+   '#ai-chat-panel.open{display:flex!important;flex-direction:column!important;}'
+  +'#ai-chat-panel .chat-msgs{flex:1 1 auto!important;min-height:0!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;}'
+  +'#ai-chat-panel .chat-foot{flex:0 0 auto!important;position:sticky!important;bottom:0!important;z-index:2!important;background:var(--bk2,#130b24)!important;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))!important;}'
+  +'#chat-input{max-height:90px!important;}'
+  /* Botón generar (dieta/rutina) — grande, gradiente, nativo */
+  +'.v36-gen{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;'
+  +'background:linear-gradient(120deg,#8b5cff,#ff2d95,#ff7a1a);color:#fff;border:none;'
+  +'border-radius:14px;padding:14px;font-weight:700;font-size:13px;letter-spacing:.3px;'
+  +'cursor:pointer;box-shadow:0 10px 26px rgba(255,45,149,.32);'
+  +'font-family:-apple-system,BlinkMacSystemFont,sans-serif;transition:transform .15s;}'
+  +'.v36-gen:active{transform:scale(.97);}'
+  +'.v36-ghost{width:100%;background:rgba(255,255,255,.05);color:var(--t2);border:1px solid rgba(255,255,255,.1);'
+  +'border-radius:12px;padding:11px;font-size:12px;font-weight:600;cursor:pointer;margin-top:8px;'
+  +'font-family:-apple-system,BlinkMacSystemFont,sans-serif;}'
+  +'.v36-empty{text-align:center;padding:26px 18px;border:1px dashed rgba(255,255,255,.12);'
+  +'border-radius:16px;background:rgba(255,255,255,.02);}'
+  +'.v36-empty h4{font-size:15px;color:var(--t1);margin:0 0 6px;font-weight:700;'
+  +'font-family:-apple-system,BlinkMacSystemFont,sans-serif;}'
+  +'.v36-empty p{font-size:12px;color:var(--t3);margin:0 0 16px;line-height:1.5;}'
+  +'.v36-sel{width:100%;background:rgba(0,0,0,.25);color:var(--t1);border:1px solid rgba(255,255,255,.12);'
+  +'border-radius:12px;padding:12px;font-size:13px;margin-bottom:10px;-webkit-appearance:none;'
+  +'font-family:-apple-system,BlinkMacSystemFont,sans-serif;}'
+  +'.v36-meal{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);'
+  +'border-radius:16px;padding:14px 16px;margin-bottom:10px;}'
+  +'.v36-meal-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}'
+  +'.v36-meal-nm{font-size:14px;font-weight:700;color:var(--t1);font-family:-apple-system,BlinkMacSystemFont,sans-serif;}'
+  +'.v36-meal-k{font-size:11px;color:var(--accent,#ff2d95);font-weight:700;font-family:var(--mono);}'
+  +'.v36-food{display:flex;align-items:center;justify-content:space-between;padding:7px 0;'
+  +'border-top:1px solid rgba(255,255,255,.04);font-size:12px;}'
+  +'.v36-food-nm{color:var(--t2);}'
+  +'.v36-food-m{color:var(--t3);font-family:var(--mono);font-size:10px;white-space:nowrap;}'
+  +'.v36-rule{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:12px;'
+  +'background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);margin-bottom:7px;}'
+  +'.v36-rule-ic{font-size:15px;flex-shrink:0;}'
+  +'.v36-rule-tx{font-size:12px;color:var(--t2);line-height:1.45;}';
+  document.head.appendChild(css);
+
+  (function(){
+    var vv=window.visualViewport; if(!vv) return;
+    function fit(){
+      var p=document.getElementById('ai-chat-panel');
+      if(!p||!p.classList.contains('open')) return;
+      p.style.height=vv.height+'px'; p.style.top=vv.offsetTop+'px'; p.style.bottom='auto';
+      var msgs=document.getElementById('chat-msgs'); if(msgs) msgs.scrollTop=msgs.scrollHeight;
+    }
+    vv.addEventListener('resize',fit); vv.addEventListener('scroll',fit);
+    if(typeof toggleChat==='function'){
+      var _tc=toggleChat;
+      toggleChat=function(){ _tc.apply(this,arguments); setTimeout(fit,60); };
+    }
+    document.addEventListener('focusin',function(e){
+      if(e.target&&e.target.id==='chat-input') setTimeout(fit,90);
+    });
+    document.addEventListener('focusout',function(e){
+      if(e.target&&e.target.id==='chat-input'){
+        var p=document.getElementById('ai-chat-panel');
+        if(p){ p.style.height=''; p.style.top=''; }
+      }
+    });
+  })();
+
+  window.__v36fit=true;
+})();
+
+/* ── (3/pt4+pt5) DIETA POR IA: comidas + macros + reglas ── */
+async function aiFullDiet(){
+  if(!_AKEY){
+    notif('Configura tu API key','Toca ⚙️ en el Coach AI para activar la IA','🔑');
+    try{ openApiKeySettings(); }catch(e){}
+    return;
+  }
+  var el=document.getElementById('s-nutrition');
+  var ld=document.createElement('div');
+  ld.id='v36-diet-load';
+  ld.style.cssText='position:fixed;inset:0;background:rgba(6,4,14,.92);z-index:800;display:flex;'
+    +'flex-direction:column;align-items:center;justify-content:center;';
+  ld.innerHTML="<div style='font-size:34px;margin-bottom:14px;'>✨</div>"
+    +"<div style='font-size:13px;color:var(--accent,#ff2d95);font-family:var(--mono);letter-spacing:2px;'>GENERANDO DIETA...</div>"
+    +"<div style='font-size:11px;color:var(--t3);margin-top:8px;'>La IA arma tus comidas y macros</div>";
+  document.body.appendChild(ld);
+  try{
+    var u=S.user||{}, m=S.metrics||{};
+    var perfil = "objetivo "+(u.targetWeight||78)+"kg y "+(u.targetBF||10)+"% de grasa, altura "+(u.height||178)+"cm"
+      + ((m.weight>0)?(", peso actual "+m.weight+"kg y grasa "+(m.bodyFat||'?')+"%"):", (sin peso registrado aún, usa el objetivo como referencia)");
+    var prompt=
+      "Eres nutricionista deportivo. Perfil de Dave: "+perfil+".\n"
+      +"Restricciones reales: SIN gluten ni trigo (gastritis), aceite de oliva siempre crudo, "
+      +"evitar exceso de carne roja, ayuno intermitente 12-16h, min 50g de carbos post-entreno.\n"
+      +"Disena UN dia completo de comidas para recomposicion (ganar masa magra y bajar grasa).\n"
+      +"Calcula tu los targets diarios coherentes con el objetivo.\n"
+      +"Responde SOLO con JSON valido, sin markdown ni texto extra:\n"
+      +'{"targets":{"kcal":N,"p":N,"c":N,"f":N},'
+      +'"meals":{"breakfast":[{"name":"...","qty":N,"unit":"g","p":N,"c":N,"f":N,"kcal":N}],'
+      +'"lunch":[...],"snacks":[...],"dinner":[...]},'
+      +'"rules":["regla breve 1","regla breve 2","regla breve 3","regla breve 4","regla breve 5","regla breve 6"]}';
+    var text=await _aiCall(prompt, 2400);
+    if(!text){ return; }
+    var jm=text.match(/\{[\s\S]*\}/);
+    if(!jm) throw new Error('La IA no devolvio JSON');
+    var parsed=JSON.parse(jm[0]);
+    var meals=parsed.meals||{};
+    ['breakfast','lunch','dinner','snacks'].forEach(function(kk){ if(!Array.isArray(meals[kk])) meals[kk]=[]; });
+    if(!meals.breakfast.length && !meals.lunch.length && !meals.dinner.length)
+      throw new Error('Estructura de dieta invalida');
+    S.meals=meals;
+    var t=_calcTotals(S.meals);
+    S.nutrition.calories.current=t.k; S.nutrition.protein.current=t.p;
+    S.nutrition.carbs.current=t.c;    S.nutrition.fat.current=t.f;
+    if(parsed.targets){
+      var tg=parsed.targets;
+      if(tg.kcal) S.nutrition.calories.target=Math.round(tg.kcal);
+      if(tg.p)    S.nutrition.protein.target =Math.round(tg.p);
+      if(tg.c)    S.nutrition.carbs.target   =Math.round(tg.c);
+      if(tg.f)    S.nutrition.fat.target     =Math.round(tg.f);
+    }
+    if(Array.isArray(parsed.rules)&&parsed.rules.length) S.dietRules=parsed.rules;
+    Store.save();
+    var ne=document.getElementById('s-nutrition'); if(ne){ ne._r=0; renderNutrition(); }
+    notif('Dieta generada','Comidas, macros y reglas actualizados','✨');
+  }catch(e){
+    console.error('[aiFullDiet]',e);
+    notif('Error IA', (e&&e.message)||'No se pudo generar la dieta','⚠');
+  }finally{
+    var l=document.getElementById('v36-diet-load'); if(l) l.remove();
+  }
+}
+
+/* ── (4/pt3) RUTINA POR IA SEGÚN PROTOCOLO ── */
+async function genRoutineAI(protocol){
+  if(!protocol){ var sel=document.getElementById('v36-proto'); protocol=sel?sel.value:'Push/Pull/Legs'; }
+  if(!_AKEY){
+    notif('Configura tu API key','Toca ⚙️ en el Coach AI para activar la IA','🔑');
+    try{ openApiKeySettings(); }catch(e){}
+    return;
+  }
+  var ld=document.createElement('div');
+  ld.id='v36-rout-load';
+  ld.style.cssText='position:fixed;inset:0;background:rgba(6,4,14,.92);z-index:800;display:flex;'
+    +'flex-direction:column;align-items:center;justify-content:center;';
+  ld.innerHTML="<div style='font-size:34px;margin-bottom:14px;'>✨</div>"
+    +"<div style='font-size:13px;color:var(--accent,#ff2d95);font-family:var(--mono);letter-spacing:2px;'>GENERANDO RUTINA...</div>"
+    +"<div style='font-size:11px;color:var(--t3);margin-top:8px;'>Protocolo "+protocol+"</div>";
+  document.body.appendChild(ld);
+  try{
+    var u=S.user||{}, m=S.metrics||{};
+    var perfil="objetivo "+(u.targetWeight||78)+"kg y "+(u.targetBF||10)+"% de grasa"
+      + ((m.weight>0)?(", peso actual "+m.weight+"kg, grasa "+(m.bodyFat||'?')+"%"):"");
+    var prompt=
+      "Eres entrenador de fuerza. Perfil: "+perfil+".\n"
+      +"Protocolo solicitado: "+protocol+".\n"
+      +"Sesiones de 30-45 min, gimnasio completo, meta de recomposicion (musculo + definicion).\n"
+      +"Asigna los ejercicios y volumen coherentes con ese protocolo.\n"
+      +"Responde SOLO con JSON valido, sin markdown:\n"
+      +'{"days":[{"nm":"MON","ty":"PUSH","cd":"","col":"#8b5cff",'
+      +'"ex":[{"nm":"...","cat":"Chest","sets":3,"reps":"6-10","rest":"90s","rpe":8}]}]}';
+    var text=await _aiCall(prompt, 2400);
+    if(!text){ return; }
+    var jm=text.match(/\{[\s\S]*\}/);
+    if(!jm) throw new Error('La IA no devolvio JSON');
+    var parsed=JSON.parse(jm[0]);
+    if(!parsed.days || !parsed.days.length) throw new Error('La IA no devolvio dias de rutina');
+    S.customDays=parsed.days;
+    Store.save();
+    var te=document.getElementById('s-training'); if(te){ te._r=0; rTrain(); }
+    notif('Rutina generada','Protocolo '+protocol+' listo','✨');
+  }catch(e){
+    console.error('[genRoutineAI]',e);
+    notif('Error IA',(e&&e.message)||'No se pudo generar la rutina','⚠');
+  }finally{
+    var l=document.getElementById('v36-rout-load'); if(l) l.remove();
+  }
+}
+
+/* ── (5) RENDER DE NUTRICIÓN DATA-DRIVEN (reemplaza el hardcodeado) ── */
+(function(){
+  var MEAL_META={
+    breakfast:{ic:'🌞',nm:'Desayuno'}, lunch:{ic:'🍽️',nm:'Almuerzo'},
+    snacks:{ic:'⚡',nm:'Snack'}, dinner:{ic:'🌙',nm:'Cena'}
+  };
+  function ring(lb,cur,tgt,col,u){
+    var R=46,VB=104,CX=52,C=2*Math.PI*R;
+    var pct=tgt>0?Math.min(cur/tgt,1):0, off=C*(1-pct);
+    return "<div style='display:flex;flex-direction:column;align-items:center;gap:6px;'>"
+      +"<div style='position:relative;width:78px;height:78px;'>"
+      +"<svg viewBox='0 0 "+VB+" "+VB+"' style='width:78px;height:78px;transform:rotate(-90deg);'>"
+      +"<circle cx='"+CX+"' cy='"+CX+"' r='"+R+"' fill='none' stroke='rgba(255,255,255,.08)' stroke-width='8'/>"
+      +"<circle cx='"+CX+"' cy='"+CX+"' r='"+R+"' fill='none' stroke='"+col+"' stroke-width='8' stroke-linecap='round' stroke-dasharray='"+C+"' stroke-dashoffset='"+off+"'/>"
+      +"</svg>"
+      +"<div style='position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;'>"
+      +"<div style='font-size:16px;font-weight:800;color:var(--t1);line-height:1;'>"+Math.round(cur)+"</div>"
+      +"<div style='font-size:8px;color:var(--t3);font-family:var(--mono);'>"+u+"</div></div></div>"
+      +"<div style='font-size:9px;color:var(--t3);font-family:var(--mono);letter-spacing:1px;'>"+lb+"</div>"
+      +"<div style='font-size:9px;color:var(--t3);'>de "+Math.round(tgt)+u+"</div></div>";
+  }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+  renderNutrition=function(){
+    var el=document.getElementById('s-nutrition'); if(!el) return;
+    var n=S.nutrition;
+    var hasMeals = S.meals && ['breakfast','lunch','dinner','snacks'].some(function(k){ return (S.meals[k]||[]).length; });
+    /* recomputar current desde meals reales si existen */
+    if(hasMeals){
+      var tt=_calcTotals(S.meals);
+      n.calories.current=tt.k; n.protein.current=tt.p; n.carbs.current=tt.c; n.fat.current=tt.f;
+    }
+    var H=[];
+    /* Macros */
+    H.push("<div class='card' style='margin-bottom:14px;'><div class='cl'>Macros de Hoy</div>"
+      +"<div style='display:flex;justify-content:space-around;flex-wrap:wrap;gap:12px;padding:8px 0 4px;'>"
+      +ring('CALORÍAS',n.calories.current,n.calories.target,'#ff7a1a','')
+      +ring('PROTEÍNA',n.protein.current,n.protein.target,'#ff2d95','g')
+      +ring('CARBS',n.carbs.current,n.carbs.target,'#8b5cff','g')
+      +ring('GRASA',n.fat.current,n.fat.target,'#22d3ee','g')
+      +"</div></div>");
+    /* Acciones IA */
+    H.push("<button class='v36-gen' onclick='aiFullDiet()'><span>✨</span> Generar dieta con IA</button>");
+    H.push("<button class='v36-ghost' onclick='abrirCambiarDieta()'>✎ Editar dieta manualmente</button>");
+    /* Comidas */
+    if(!hasMeals){
+      H.push("<div class='v36-empty' style='margin-top:14px;'><h4>Aún no tienes una dieta</h4>"
+        +"<p>Genera un plan completo con IA según tu objetivo (78kg / 10%), o edítalo tú mismo. "
+        +"Los macros del día se calculan solos a partir de tus comidas.</p></div>");
+    }else{
+      H.push("<div style='margin-top:16px;'>");
+      ['breakfast','lunch','snacks','dinner'].forEach(function(mk){
+        var arr=S.meals[mk]||[]; if(!arr.length) return;
+        var meta=MEAL_META[mk]||{ic:'🍴',nm:mk};
+        var mk_k=0; arr.forEach(function(f){ mk_k+=Number(f.kcal)||0; });
+        var rows='';
+        arr.forEach(function(f){
+          rows+="<div class='v36-food'><span class='v36-food-nm'>"+esc(f.name)
+            +(f.qty?" <span style='color:var(--t3);font-size:10px;'>"+esc(f.qty)+esc(f.unit||'g')+"</span>":"")
+            +"</span><span class='v36-food-m'>"+(Number(f.p)||0)+"P · "+(Number(f.c)||0)+"C · "+(Number(f.f)||0)+"F · "+(Number(f.kcal)||0)+"kcal</span></div>";
+        });
+        H.push("<div class='v36-meal'><div class='v36-meal-hd'>"
+          +"<span class='v36-meal-nm'>"+meta.ic+" "+meta.nm+"</span>"
+          +"<span class='v36-meal-k'>"+Math.round(mk_k)+" kcal</span></div>"+rows+"</div>");
+      });
+      H.push("</div>");
+    }
+    /* Dietary Rules dinámicas */
+    var rules=(S.dietRules&&S.dietRules.length)?S.dietRules:null;
+    H.push("<div class='card' style='margin-top:16px;'><div class='cl'>Reglas de tu Dieta</div><div style='margin-top:8px;'>");
+    if(rules){
+      rules.forEach(function(r){
+        H.push("<div class='v36-rule'><span class='v36-rule-ic'>✓</span><span class='v36-rule-tx'>"+esc(r)+"</span></div>");
+      });
+    }else{
+      H.push("<div class='v36-rule'><span class='v36-rule-ic'>💡</span><span class='v36-rule-tx'>"
+        +"Las reglas se ajustan a tu dieta cuando la generas con IA (sin gluten, aceite crudo, ayuno, etc.).</span></div>");
+    }
+    H.push("</div></div>");
+    el.innerHTML=H.join('');
+    el._r=1;
+  };
+})();
+
+/* ── (6) RUTINA: empty-state + protocolo + botón, sin datos fijos ── */
+(function(){
+  var PROTOCOLS=['Push/Pull/Legs (5-6 días)','Upper/Lower (4 días)','Full Body (3 días)',
+    'Push/Pull (4 días)','Arnold Split (6 días)','Powerbuilding (5 días)'];
+  function emptyState(el){
+    var opts=PROTOCOLS.map(function(p){return "<option value='"+p+"'>"+p+"</option>";}).join('');
+    el.innerHTML="<div class='card'><div class='cl'>Entrenamiento</div>"
+      +"<div class='v36-empty' style='margin-top:10px;'><h4>Aún no tienes rutina</h4>"
+      +"<p>Elige un protocolo y la IA arma tu semana de entrenamiento según tu objetivo (78kg / 10%). "
+      +"Podrás editar cada ejercicio después.</p>"
+      +"<select class='v36-sel' id='v36-proto'>"+opts+"</select>"
+      +"<button class='v36-gen' onclick='genRoutineAI()'><span>✨</span> Generar rutina con IA</button>"
+      +"</div></div>";
+    el._r=1;
+  }
+  var _rTrain = (typeof rTrain==='function')?rTrain:null;
+  rTrain=function(){
+    var el=document.getElementById('s-training');
+    var has = S.customDays && S.customDays.length;
+    if(el && !has){ emptyState(el); return; }
+    if(typeof _rTrain==='function'){ _rTrain.apply(this,arguments); }
+    /* añadir botón "regenerar con IA" arriba si hay rutina */
+    if(el && has && !document.getElementById('v36-reroute')){
+      var bar=document.createElement('div');
+      bar.id='v36-reroute'; bar.style.cssText='margin:10px 0 0;';
+      var opts=PROTOCOLS.map(function(p){return "<option value='"+p+"'>"+p+"</option>";}).join('');
+      bar.innerHTML="<details style='border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:10px 12px;'>"
+        +"<summary style='cursor:pointer;font-size:12px;color:var(--t2);font-weight:600;'>✨ Regenerar rutina con IA</summary>"
+        +"<div style='margin-top:10px;'><select class='v36-sel' id='v36-proto'>"+opts+"</select>"
+        +"<button class='v36-gen' onclick='genRoutineAI()'>Generar nueva rutina</button></div></details>";
+      el.appendChild(bar);
+    }
+  };
+})();
+
+/* ── Versión ── */
+try{ APP_VERSION="v36"; APP_BUILD="2026-08-19";
+  var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+  console.log("%c◈ Project Liberato Fitness "+APP_VERSION+" · "+APP_BUILD,"color:#ff2d95;font-weight:bold;font-size:13px;");
+}catch(e){}
 
 </script>
 
