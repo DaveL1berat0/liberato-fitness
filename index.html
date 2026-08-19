@@ -6120,6 +6120,298 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
   var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
 }catch(e){}
 
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V41 — NAV MÁS ARRIBA · TIMELINE HONESTO · MODALES COMPLETOS · GATE IA · SCAN→MÉTRICAS
+   (19-ago-2026) 4 ajustes de Dave.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v41) return; window.__v41=true;
+
+  var css=document.createElement('style'); css.textContent=
+   /* (1) barra inferior más arriba, lejos del borde, tap targets mayores */
+   '#v30-nav{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 12px) !important;padding-top:8px !important;}'
+  +'.v30-tab{padding-top:10px !important;padding-bottom:8px !important;}'
+  +'#content{padding-bottom:104px !important;}'
+   /* (3) modales abren grandes (no a media pantalla) en móvil */
+  +'@media(max-width:768px){'
+  +'#mc{min-height:84dvh !important;max-height:94dvh !important;}'
+  +'.mb{flex:1 1 auto !important;min-height:0 !important;}'
+  +'}'
+   /* botón aplicar grasa del scan */
+  +'.v41-apply{width:100%;margin-top:12px;background:linear-gradient(120deg,#8b5cff,#ff2d95,#ff7a1a);color:#fff;'
+  +'border:none;border-radius:12px;padding:12px;font-size:12.5px;font-weight:800;cursor:pointer;'
+  +'font-family:-apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 8px 20px rgba(255,45,149,.28);}'
+  +'.v41-gatemsg{text-align:center;padding:18px;color:var(--t3);font-size:12px;line-height:1.5;}';
+  document.head.appendChild(css);
+
+  /* ---- (2) EVOLUTION TIMELINE HONESTO: vacío hasta el primer registro ---- */
+  rTimeline=function(){
+    var el=document.getElementById('s-timeline'); if(!el) return;
+    var ci=(S.checkins||[]).slice();
+    if(!ci.length){
+      el.innerHTML='<div class="sh"><div><div class="st">Evolution Timeline</div>'
+        +'<div class="ss">0 registros · empieza tu evolución</div></div></div>'
+        +'<div class="card"><div class="v36-empty">'
+        +'<h4>Aún no hay registros</h4>'
+        +'<p>Tu evolución empieza con tu primer check-in. Toca <b>“Ingresar Nuevo Progreso”</b> '
+        +'y registra tu peso y medidas reales — aquí no se inventa ningún historial.</p>'
+        +'<button class="v36-gen" onclick="openProgress&&openProgress()">Ingresar mi primer progreso</button>'
+        +'</div></div>';
+      el._r=1; return;
+    }
+    /* orden cronológico ascendente para el gráfico */
+    var asc=ci.slice().reverse();
+    var ws=asc.map(function(c){return Number(c.weight)||0;});
+    var mn=Math.min.apply(null,ws), mx=Math.max.apply(null,ws);
+    var rng=(mx-mn)||1;
+    var W=600,H=110,pad=10;
+    var pts=asc.map(function(c,i){
+      var x=asc.length>1?(i/(asc.length-1))*W:W/2;
+      var y=H-pad-((Number(c.weight)-mn)/rng)*(H-2*pad);
+      return [Math.round(x),Math.round(y)];
+    });
+    var poly=pts.map(function(p){return p[0]+','+p[1];}).join(' ');
+    var dots=pts.map(function(p,i){return '<circle cx="'+p[0]+'" cy="'+p[1]+'" r="'+(i===pts.length-1?5:4)+'" fill="#00E5FF"'+(i===pts.length-1?' stroke="#000" stroke-width="2"':'')+'/>';}).join('');
+    var rows=ci.map(function(c,i){
+      return '<div class="tp '+(i===0?'cur':'')+'"><div class="td">'+(c.date||'')+'</div>'
+        +'<div class="tw">'+(c.weight||'—')+'<span style="font-size:12px;color:var(--t3);">kg</span></div>'
+        +'<div class="tt">'+(c.bodyFat!=null?(c.bodyFat+'% BF'):('v'+(c.version||(ci.length-i))))+'</div>'
+        +(i===0?'<div style="font-size:9px;color:var(--green);font-family:var(--mono);margin-top:4px;">● ACTUAL</div>':'')+'</div>';
+    }).join('');
+    var first=asc[0], last=asc[asc.length-1];
+    var dW=(Number(last.weight)-Number(first.weight));
+    var trend=ci.length>1?((dW>0?'+':'')+dW.toFixed(1)+' kg desde tu primer registro ('+first.date+')'):'Primer registro guardado. Añade más para ver tu tendencia real.';
+    el.innerHTML='<div class="sh"><div><div class="st">Evolution Timeline</div>'
+      +'<div class="ss">'+ci.length+' registro'+(ci.length>1?'s':'')+' · datos reales</div></div></div>'
+      +'<div class="card"><div class="cl">Historial de Check-ins</div><div class="tl">'+rows+'</div></div>'
+      +(ci.length>1?('<div class="card mt16"><div class="cl">Tendencia de Peso</div>'
+        +'<svg width="100%" height="120" viewBox="0 0 600 110" preserveAspectRatio="none" style="margin-top:8px;">'
+        +'<defs><linearGradient id="lg41" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00E5FF" stop-opacity=".3"/><stop offset="100%" stop-color="#00E5FF" stop-opacity="0"/></linearGradient></defs>'
+        +'<polyline points="'+poly+'" fill="none" stroke="#00E5FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>'
+        +dots+'</svg></div>'):'')
+      +'<div class="air mt16"><div class="ait">'+trend+'</div></div>';
+    el._r=1;
+  };
+
+  /* ---- (3) GATE GLOBAL DE IA: nada de IA hasta confirmar objetivo ---- */
+  function goalOK(){ return !!(S.user && S.user.goalConfirmed); }
+  _requireGoal=function(){
+    if(goalOK()) return true;
+    notif('Primero confirma tu objetivo','La IA necesita tu meta para darte resultados exactos. Ve a Inicio.','\u{1F3AF}');
+    try{ document.getElementById('s-brief').scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){}
+    return false;
+  };
+  /* envolver funciones de IA para exigir objetivo */
+  if(typeof aiScanBody==='function'){
+    var _scan=aiScanBody;
+    aiScanBody=async function(){
+      if(!goalOK()){ _requireGoal();
+        var res=document.getElementById('scan-result');
+        if(res) res.innerHTML='<div class="v41-gatemsg">\u{1F3AF} Confirma tu objetivo en <b>Inicio</b> para que la IA analice tu foto según tu meta.</div>';
+        return; }
+      var r=await _scan.apply(this,arguments);
+      /* (4) tras el scan, ofrecer aplicar la grasa estimada a Key Metrics */
+      try{ _v41OfferApplyBF(); }catch(e){}
+      return r;
+    };
+  }
+  if(typeof chatSend==='function'){
+    var _cs=chatSend;
+    chatSend=async function(){
+      if(!goalOK()){
+        var m=document.getElementById('chat-msgs');
+        if(m){ var d=document.createElement('div'); d.className='chat-msg ai';
+          d.innerHTML='\u{1F3AF} Primero confirma tu objetivo en <b>Inicio</b>. Así te doy consejos y análisis exactos según tu meta.';
+          m.appendChild(d); m.scrollTop=m.scrollHeight; }
+        return;
+      }
+      return _cs.apply(this,arguments);
+    };
+  }
+
+  /* ---- (4) SCAN → aplicar % grasa estimado a Key Metrics (Regla #1: es estimación, tú decides) ---- */
+  _v41OfferApplyBF=function(){
+    var res=document.getElementById('scan-result'); if(!res) return;
+    var m=res.innerHTML.match(/~?\s*(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)\s*%/);
+    if(!m) return;
+    var lo=parseFloat(m[1]), hi=parseFloat(m[2]);
+    if(isNaN(lo)||isNaN(hi)) return;
+    var mid=Math.round(((lo+hi)/2)*10)/10;
+    /* rango 0-100 = sin lectura fiable, no ofrecer */
+    if(lo<=0 && hi>=100) return;
+    if(document.getElementById('v41-apply-bf')) return;
+    var btn=document.createElement('button');
+    btn.id='v41-apply-bf'; btn.className='v41-apply';
+    btn.innerHTML='➕ Aplicar % grasa estimado (~'+mid+'%) a mis métricas';
+    btn.onclick=function(){
+      S.metrics.bodyFat=mid; S.metrics._bfFromScan=true;
+      Store.save();
+      if(typeof renderBodyCol==='function') renderBodyCol();
+      notif('Grasa aplicada','~'+mid+'% (estimación IA) en Key Metrics','✓');
+    };
+    res.appendChild(btn);
+    var note=document.createElement('div');
+    note.style.cssText='font-size:10px;color:var(--t3);margin-top:6px;text-align:center;line-height:1.4;';
+    note.innerHTML='Es una <b>estimación visual</b>, no una medición. Peso y circunferencias se registran a mano.';
+    res.appendChild(note);
+  };
+
+  /* ---- versión ---- */
+  try{ APP_VERSION="v41"; APP_BUILD="2026-08-19";
+    var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+  }catch(e){}
+})();
+
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V41b — SCAN MULTI-FOTO → % GRASA EN KEY METRICS
+   Dave: la IA puede estimar grasa corporal con varias fotos; eso debe
+   reflejarse en Key Metrics. Usa TODAS las fotos subidas (main+p1..p4),
+   estima grasa % + desarrollo por zona, y aplica la grasa a las métricas
+   (etiquetada como estimación IA — Regla #1). Peso/cm siguen siendo manuales.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v41b) return; window.__v41b=true;
+
+  /* helper visión multi-imagen */
+  _aiCallVisionMulti=async function(prompt, maxTokens, images){
+    if(!_AKEY){ notif('API Key no configurada','Configura tu key con ⚙','&#x1F511;'); return null; }
+    var p=_getProvider(), cfg=_getApiConfig(), model=_getVisionModel();
+    var body;
+    if(p==='anthropic'){
+      var content=[{type:'text',text:prompt}];
+      images.forEach(function(im){ content.push({type:'image',source:{type:'base64',media_type:im.mime,data:im.b64}}); });
+      body={model:model,max_tokens:maxTokens||1200,messages:[{role:'user',content:content}]};
+    } else {
+      var content2=[{type:'text',text:prompt}];
+      images.forEach(function(im){ content2.push({type:'image_url',image_url:{url:'data:'+im.mime+';base64,'+im.b64}}); });
+      body={model:model,max_tokens:(p==='groq')?Math.max(maxTokens||0,1400):(maxTokens||1200),messages:[{role:'user',content:content2}]};
+      if(p==='groq') body.reasoning_effort='none';
+    }
+    var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+    var to=ctrl?setTimeout(function(){try{ctrl.abort();}catch(e){}},50000):null;
+    try{
+      var res=await fetch(cfg.url,{method:'POST',headers:cfg.headers,body:JSON.stringify(body),signal:ctrl?ctrl.signal:undefined});
+      if(to)clearTimeout(to);
+      var data=await res.json();
+      if(!res.ok) throw new Error((data.error&&data.error.message)||('HTTP '+res.status));
+      return _parseAiResponse(data)||'';
+    }catch(e){ if(to)clearTimeout(to); if(e&&e.name==='AbortError') throw new Error('La IA tardó demasiado. Reintenta con buena señal.'); throw e; }
+  };
+
+  function _lvl(v){ v=(v||'').toLowerCase(); return v==='high'?['Alta','#33e08a']:v==='medium'?['Media','#ffa64d']:['Baja','#ff6b81']; }
+  function _bar(label,v){ var l=_lvl(v); var pct=v==='high'?100:v==='medium'?60:28;
+    return '<div style="margin-bottom:9px;"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;">'
+      +'<span style="color:var(--t2);">'+label+'</span><span style="color:'+l[1]+';font-weight:700;">'+l[0]+'</span></div>'
+      +'<div style="height:6px;border-radius:3px;background:rgba(255,255,255,.06);overflow:hidden;">'
+      +'<div style="height:100%;width:'+pct+'%;background:'+l[1]+';border-radius:3px;"></div></div></div>'; }
+
+  aiScanBody=async function(){
+    var btn=document.getElementById('aib-cuerpo');
+    var res=document.getElementById('scan-result');
+    /* gate: IA bloqueada hasta confirmar objetivo */
+    if(!(S.user&&S.user.goalConfirmed)){
+      if(typeof _requireGoal==='function') _requireGoal();
+      if(res) res.innerHTML='<div class="v41-gatemsg">\u{1F3AF} Confirma tu objetivo en <b>Inicio</b> para que la IA analice tus fotos según tu meta.</div>';
+      return;
+    }
+    /* recopilar TODAS las fotos disponibles */
+    /* Groq free tier: 2 imágenes caben en el límite TPM. Priorizar frente + espalda */
+    var keys=['p1','p3','p2','main','p4'], labels={main:'principal',p1:'frente',p2:'lado izq',p3:'espalda',p4:'lado der'};
+    var imgs=[];
+    keys.forEach(function(k){ if(imgs.length>=2) return; var d=S.photos&&S.photos[k];
+      if(d&&d.indexOf('data:')===0){ imgs.push({b64:d.split(',')[1], mime:(d.split(';')[0].split(':')[1])||'image/jpeg', tag:labels[k]||k}); } });
+    if(!imgs.length){
+      if(res) res.innerHTML='<div style="color:var(--orange);font-size:12px;margin-top:10px;">⚠ Sube al menos una foto (idealmente 4: frente, lado, espalda, lado) en el Body Scanner.</div>';
+      return;
+    }
+    if(btn){ btn.classList.add('loading'); btn.innerHTML='<span class="ai-spin"></span> Analizando '+imgs.length+' foto'+(imgs.length>1?'s':'')+'…'; }
+    var prompt="Eres especialista en composicion corporal. Tienes "+imgs.length+" foto(s) del MISMO cuerpo (Dave). "
+      +"Objetivo: "+(S.user.targetWeight||78)+"kg y "+(S.user.targetBF||10)+"% grasa. "
+      +"Con varias vistas AFINA la estimacion de grasa. Se conservador y honesto: si la calidad/encuadre no permite, baja confidence. "
+      +"Estima SOLO lo visual: grasa corporal % (rango) y desarrollo muscular por zona. "
+      +"NUNCA des peso en kg, % de agua ni circunferencias exactas (eso no sale de una foto). "
+      +"Responde SOLO JSON sin markdown: "
+      +'{"bodyFatMin":N,"bodyFatMax":N,'
+      +'"regions":{"shoulders":"low|medium|high","chest":"low|medium|high","back":"low|medium|high","arms":"low|medium|high","core":"low|medium|high","legs":"low|medium|high"},'
+      +'"vTaper":"texto corto","symmetry":"balanced|left|right","weakPoints":["z1","z2"],'
+      +'"goalGap":"1-2 frases: que falta para tu meta y en que enfocar","confidence":"low|medium|high","warning":"texto o vacio"}';
+    try{
+      var text=await _aiCallVisionMulti(prompt, 1100, imgs);
+      if(text===null){ if(btn){btn.classList.remove('loading');btn.innerHTML='<span>&#x26A1;</span> Escanear con IA';} return; }
+      var jm=text.match(/\{[\s\S]*\}/); if(!jm) throw new Error('La IA no devolvió JSON');
+      var v=JSON.parse(jm[0]);
+      var reg=v.regions||{};
+      var lo=Number(v.bodyFatMin), hi=Number(v.bodyFatMax);
+      var haveBF=!isNaN(lo)&&!isNaN(hi)&&!(lo<=0&&hi>=100);
+      var mid=haveBF?Math.round(((lo+hi)/2)*10)/10:null;
+      var conf=(v.confidence||'low').toLowerCase();
+      var confC=conf==='high'?'#33e08a':conf==='medium'?'#ffa64d':'#ff6b81';
+      var H=[];
+      H.push('<div style="margin-top:14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:16px;">');
+      H.push('<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">');
+      H.push('<div><div style="font-size:26px;font-weight:800;color:var(--t1);">'+(haveBF?('~'+lo+'–'+hi+'%'):'—')+'</div>'
+        +'<div style="font-size:10px;color:var(--t3);font-family:var(--mono);letter-spacing:1px;">GRASA ESTIMADA · '+imgs.length+' FOTO'+(imgs.length>1?'S':'')+'</div></div>');
+      H.push('<div style="text-align:right;"><div style="font-size:13px;font-weight:700;color:'+confC+';">'+conf+'</div><div style="font-size:9px;color:var(--t3);">confianza</div></div>');
+      H.push('</div>');
+      if(v.vTaper||v.symmetry){ H.push('<div style="font-size:11px;color:var(--t3);margin:6px 0 12px;">V-taper: <b style="color:var(--t2);">'+(v.vTaper||'—')+'</b> · Simetría: <b style="color:var(--t2);">'+({balanced:'Balanceada',left:'Domina izq.',right:'Domina der.'}[(v.symmetry||'').toLowerCase()]||'—')+'</b></div>'); }
+      H.push('<div style="font-size:10px;color:var(--t3);font-family:var(--mono);letter-spacing:1px;margin-bottom:8px;">DESARROLLO POR ZONA</div>');
+      H.push(_bar('Hombros',reg.shoulders)+_bar('Pecho',reg.chest)+_bar('Espalda',reg.back)+_bar('Brazos',reg.arms)+_bar('Core',reg.core)+_bar('Piernas',reg.legs));
+      if(v.weakPoints&&v.weakPoints.length) H.push('<div style="font-size:11px;color:var(--t2);margin-top:8px;"><b>A priorizar:</b> '+v.weakPoints.join(', ')+'</div>');
+      if(v.goalGap) H.push('<div style="font-size:11.5px;color:var(--t2);line-height:1.5;margin-top:8px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06);">'+String(v.goalGap).replace(/</g,'&lt;')+'</div>');
+      H.push('</div>');
+      if(res) res.innerHTML=H.join('');
+
+      /* aplicar grasa estimada a Key Metrics (Regla #1: estimación etiquetada, tú puedes sobrescribir) */
+      if(haveBF && (conf==='medium'||conf==='high')){
+        S.metrics.bodyFat=mid; S.metrics._bfFromScan=true; Store.save();
+        if(typeof renderBodyCol==='function') renderBodyCol();
+        notif('% grasa actualizado','~'+mid+'% (estimación IA · '+imgs.length+' fotos) en Key Metrics','✓');
+      } else if(haveBF){
+        /* confianza baja: NO auto-aplicar, ofrecer botón */
+        if(res){
+          var b=document.createElement('button'); b.className='v41-apply';
+          b.innerHTML='➕ Aplicar ~'+mid+'% a mis métricas (confianza baja)';
+          b.onclick=function(){ S.metrics.bodyFat=mid; S.metrics._bfFromScan=true; Store.save(); if(typeof renderBodyCol==='function') renderBodyCol(); notif('% grasa aplicado','~'+mid+'% (estimación IA)','✓'); };
+          res.appendChild(b);
+        }
+        notif('Confianza baja','Sube 3-4 fotos nítidas (frente/lado/espalda) para afinar','⚠');
+      } else {
+        notif('Sin lectura fiable','Sube fotos de cuerpo completo con buena luz y fondo liso','⚠');
+      }
+    }catch(e){
+      if(res) res.innerHTML='<div style="color:var(--red);font-size:12px;margin-top:10px;">❌ No se pudo analizar: '+((e&&e.message)||'error')+'. Prueba con mejor luz, cuerpo completo y fondo liso.</div>';
+      notif('Scan fallido',(e&&e.message)||'Error al analizar','❌');
+      console.error('[aiScanBody v41b]',e);
+    }
+    if(btn){ btn.classList.remove('loading'); btn.innerHTML='<span>&#x26A1;</span> Escanear con IA'; }
+  };
+
+  /* etiqueta "IA" junto a BODY FAT en Key Metrics cuando viene del scan */
+  if(typeof renderBodyCol==='function'){
+    var _rbc=renderBodyCol;
+    renderBodyCol=function(){
+      _rbc.apply(this,arguments);
+      try{
+        if(S.metrics&&S.metrics._bfFromScan){
+          var el=document.getElementById('s-body'); if(!el) return;
+          var spans=el.querySelectorAll('span');
+          for(var i=0;i<spans.length;i++){
+            if(spans[i].textContent.trim()==='BODY FAT' && !spans[i].parentElement.querySelector('.v41-iatag')){
+              var t=document.createElement('span'); t.className='v41-iatag';
+              t.textContent='IA'; t.style.cssText='font-size:7px;background:rgba(139,92,255,.25);color:#c9b8ff;padding:1px 5px;border-radius:6px;margin-left:6px;font-family:var(--mono);letter-spacing:.5px;';
+              spans[i].appendChild(t); break;
+            }
+          }
+        }
+      }catch(e){}
+    };
+  }
+})();
+
 </script>
 
   <button id="ai-chat-btn" onclick="toggleChat()" title="Coach AI">&#x1F4AC;</button>
