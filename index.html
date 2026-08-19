@@ -5558,6 +5558,300 @@ try{ APP_VERSION="v38"; APP_BUILD="2026-08-19";
   maybeClean();
 })();
 
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V39 — SCAN FIABLE · OBJETIVO · TARJETA HERO · LIMPIAR · FECHA · IA EVIDENCIA
+   (19-ago-2026) Atiende los 6 puntos de Dave + auditoría.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v39) return; window.__v39=true;
+
+  /* ---- (pt2) OBJETIVO CORPORAL: qué quiere lograr Dave ---- */
+  if(!S.user) S.user={};
+  if(!S.user.goalType) S.user.goalType='Recomposición';
+  window.GOAL_TYPES=['Bajar grasa','Ganar músculo','Recomposición','Definir/marcar'];
+
+  /* ---- (pt5) FECHA DE ÚLTIMA ACTUALIZACIÓN ---- */
+  var _MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  _fmtFecha=function(iso){
+    try{ var d=iso?new Date(iso):null; if(!d||isNaN(d)) return null;
+      var h=d.getHours(), m=d.getMinutes();
+      return d.getDate()+' '+_MESES[d.getMonth()]+' '+d.getFullYear()+
+        ', '+(h<10?'0':'')+h+':'+(m<10?'0':'')+m;
+    }catch(e){ return null; }
+  };
+  /* sellar updatedAt en cada guardado real (foto, check-in, dieta, rutina, objetivo) */
+  (function(){
+    var _s=Store.save;
+    Store.save=function(){
+      try{ S.updatedAt=new Date().toISOString(); }catch(e){}
+      return _s.apply(this,arguments);
+    };
+  })();
+
+  /* ---- persistir goalType + updatedAt en pf1x ---- */
+  (function(){
+    try{
+      var x=JSON.parse(localStorage.getItem('pf1x')||'null');
+      if(x){ if(x.goalType)S.user.goalType=x.goalType; if(x.updatedAt)S.updatedAt=x.updatedAt; }
+    }catch(e){}
+    var _s=Store.save;
+    Store.save=function(){
+      var r=_s.apply(this,arguments);
+      try{
+        var cur=JSON.parse(localStorage.getItem('pf1x')||'{}');
+        cur.goalType=S.user&&S.user.goalType; cur.updatedAt=S.updatedAt;
+        localStorage.setItem('pf1x',JSON.stringify(cur));
+      }catch(e){}
+      return r;
+    };
+  })();
+
+  /* ---- (pt1) SCAN FIABLE: visión con reasoning_effort none + timeout ---- */
+  _aiCallVision=async function(prompt, maxTokens, b64, mime){
+    if(!_AKEY){ notif("API Key no configurada","Configura tu key con el bot\u00f3n \u2699","&#x1F511;"); return null; }
+    var p=_getProvider(); var cfg=_getApiConfig(); var model=_getVisionModel();
+    var body;
+    if(p==='anthropic'){
+      body={model:model,max_tokens:maxTokens||900,messages:[{role:'user',content:[
+        {type:'image',source:{type:'base64',media_type:mime,data:b64}},
+        {type:'text',text:prompt}]}]};
+    } else {
+      body={model:model,max_tokens:(p==='groq')?Math.max(maxTokens||0,1200):(maxTokens||900),
+        messages:[{role:'user',content:[
+          {type:'text',text:prompt},
+          {type:'image_url',image_url:{url:'data:'+mime+';base64,'+b64}}]}]};
+      if(p==='groq') body.reasoning_effort='none';   /* NO razonar: rápido y sin colgarse */
+    }
+    var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+    var to=ctrl?setTimeout(function(){try{ctrl.abort();}catch(e){}},45000):null;
+    try{
+      var res=await fetch(cfg.url,{method:'POST',headers:cfg.headers,body:JSON.stringify(body),signal:ctrl?ctrl.signal:undefined});
+      if(to) clearTimeout(to);
+      var data=await res.json();
+      if(!res.ok) throw new Error((data.error&&data.error.message)||('HTTP '+res.status));
+      return _parseAiResponse(data)||'';
+    }catch(e){
+      if(to) clearTimeout(to);
+      if(e&&e.name==='AbortError') throw new Error('La IA tard\u00f3 demasiado. Reintenta con buena se\u00f1al.');
+      throw e;
+    }
+  };
+
+  /* ---- (pt6) DIRECTRIZ BASADA EN EVIDENCIA (honesta) ---- */
+  window._EVID='DIRECTRIZ BASADA EN EVIDENCIA: aplica el consenso actual de ciencia del deporte '
+    +'(meta-analisis 2023-2025): frecuencia por grupo muscular 2x/semana suele superar 1x para hipertrofia; '
+    +'el estimulo util viene de series cercanas al fallo (RIR 0-3); 6-12 reps son eficientes en tiempo aunque '
+    +'5-30 crecen si hay proximidad al fallo; volumen minimo efectivo ~10 series/musculo/semana; proteina '
+    +'1.6-2.2 g/kg; prioriza compuestos y eficiencia de tiempo. Optimiza SIEMPRE resultado por unidad de tiempo. '
+    +'Esto viene de tu conocimiento de la literatura, NO de una busqueda web en vivo; si algo es incierto o '
+    +'depende del individuo, dilo con honestidad.';
+
+  /* Coach AI: inyectar objetivo + evidencia + macros reales en el system prompt */
+  (function(){
+    var _bb=_buildBody;
+    _buildBody=function(msgs, maxTok, sysPrompt){
+      if(sysPrompt && /Coach AI/.test(sysPrompt)){
+        var n=S.nutrition;
+        sysPrompt += ' Objetivo de Dave: '+(S.user&&S.user.goalType||'Recomposición')+'. '
+          + 'Macros objetivo REALES: P:'+n.protein.target+'g C:'+n.carbs.target+'g Grasa:'+n.fat.target
+          + 'g Kcal:'+n.calories.target+' (usa estos, ignora cualquier otro). ' + window._EVID;
+      }
+      return _bb.call(this, msgs, maxTok, sysPrompt);
+    };
+  })();
+
+  window.__v39done=true;
+})();
+
+/* ---- (pt6+pt2) DIETA POR IA con objetivo + evidencia ---- */
+async function aiFullDiet(){
+  if(!_AKEY){ notif('Configura tu API key','Toca \u2699 en el Coach AI','&#x1F511;'); try{openApiKeySettings();}catch(e){} return; }
+  var ld=document.createElement('div'); ld.id='v36-diet-load';
+  ld.style.cssText='position:fixed;inset:0;background:rgba(6,4,14,.92);z-index:800;display:flex;flex-direction:column;align-items:center;justify-content:center;';
+  ld.innerHTML="<div style='font-size:34px;margin-bottom:14px;'>\u2728</div><div style='font-size:13px;color:var(--accent,#ff2d95);font-family:var(--mono);letter-spacing:2px;'>GENERANDO DIETA...</div><div style='font-size:11px;color:var(--t3);margin-top:8px;'>Optimizada por evidencia</div>";
+  document.body.appendChild(ld);
+  try{
+    var u=S.user||{}, m=S.metrics||{};
+    var perfil="objetivo del usuario: "+(u.goalType||'Recomposición')+". Meta fisica "+(u.targetWeight||78)+"kg y "+(u.targetBF||10)+"% grasa, altura "+(u.height||178)+"cm"
+      +((m.weight>0)?(", peso actual "+m.weight+"kg y grasa "+(m.bodyFat||'?')+"%"):", (sin peso registrado; usa la meta como referencia)");
+    var prompt="Eres nutricionista deportivo. Perfil: "+perfil+".\n"
+      +"Restricciones REALES: SIN gluten ni trigo (gastritis), aceite de oliva crudo, evitar exceso de carne roja, ayuno 12-16h, min 50g carbos post-entreno.\n"
+      +(window._EVID||'')+"\n"
+      +"Disena UN dia completo de comidas coherente con el objetivo. Calcula tu los targets diarios.\n"
+      +"Responde SOLO JSON valido sin markdown:\n"
+      +'{"targets":{"kcal":N,"p":N,"c":N,"f":N},"meals":{"breakfast":[{"name":"...","qty":N,"unit":"g","p":N,"c":N,"f":N,"kcal":N}],"lunch":[...],"snacks":[...],"dinner":[...]},"rules":["r1","r2","r3","r4","r5","r6"]}';
+    var text=await _aiCall(prompt, 2400);
+    if(!text) return;
+    var jm=text.match(/\{[\s\S]*\}/); if(!jm) throw new Error('La IA no devolvio JSON');
+    var parsed=JSON.parse(jm[0]); var meals=parsed.meals||{};
+    ['breakfast','lunch','dinner','snacks'].forEach(function(k){ if(!Array.isArray(meals[k])) meals[k]=[]; });
+    if(!meals.breakfast.length && !meals.lunch.length && !meals.dinner.length) throw new Error('Estructura de dieta invalida');
+    S.meals=meals;
+    var t=_calcTotals(S.meals);
+    S.nutrition.calories.current=t.k; S.nutrition.protein.current=t.p; S.nutrition.carbs.current=t.c; S.nutrition.fat.current=t.f;
+    if(parsed.targets){ var tg=parsed.targets;
+      if(tg.kcal)S.nutrition.calories.target=Math.round(tg.kcal); if(tg.p)S.nutrition.protein.target=Math.round(tg.p);
+      if(tg.c)S.nutrition.carbs.target=Math.round(tg.c); if(tg.f)S.nutrition.fat.target=Math.round(tg.f); }
+    if(Array.isArray(parsed.rules)&&parsed.rules.length) S.dietRules=parsed.rules;
+    Store.save();
+    var ne=document.getElementById('s-nutrition'); if(ne){ne._r=0;renderNutrition();}
+    notif('Dieta generada','Comidas, macros y reglas actualizados','\u2728');
+  }catch(e){ console.error('[aiFullDiet]',e); notif('Error IA',(e&&e.message)||'No se pudo generar','\u26A0'); }
+  finally{ var l=document.getElementById('v36-diet-load'); if(l) l.remove(); }
+}
+
+/* ---- (pt6+pt2) RUTINA POR IA con objetivo + evidencia ---- */
+async function genRoutineAI(protocol){
+  if(!protocol){ var sel=document.getElementById('v36-proto'); protocol=sel?sel.value:'Push/Pull/Legs'; }
+  if(!_AKEY){ notif('Configura tu API key','Toca \u2699 en el Coach AI','&#x1F511;'); try{openApiKeySettings();}catch(e){} return; }
+  var ld=document.createElement('div'); ld.id='v36-rout-load';
+  ld.style.cssText='position:fixed;inset:0;background:rgba(6,4,14,.92);z-index:800;display:flex;flex-direction:column;align-items:center;justify-content:center;';
+  ld.innerHTML="<div style='font-size:34px;margin-bottom:14px;'>\u2728</div><div style='font-size:13px;color:var(--accent,#ff2d95);font-family:var(--mono);letter-spacing:2px;'>GENERANDO RUTINA...</div><div style='font-size:11px;color:var(--t3);margin-top:8px;'>"+protocol+" · por evidencia</div>";
+  document.body.appendChild(ld);
+  try{
+    var u=S.user||{}, m=S.metrics||{};
+    var perfil="objetivo "+(u.goalType||'Recomposición')+", meta "+(u.targetWeight||78)+"kg y "+(u.targetBF||10)+"% grasa"+((m.weight>0)?(", peso "+m.weight+"kg, grasa "+(m.bodyFat||'?')+"%"):"");
+    var prompt="Eres entrenador de fuerza. Perfil: "+perfil+".\n"
+      +"Protocolo: "+protocol+". Sesiones 30-45 min, gym completo.\n"
+      +(window._EVID||'')+"\n"
+      +"Asigna ejercicios y volumen segun la evidencia y el objetivo. Responde SOLO JSON sin markdown:\n"
+      +'{"days":[{"nm":"MON","ty":"PUSH","cd":"","col":"#8b5cff","ex":[{"nm":"...","cat":"Chest","sets":3,"reps":"6-10","rest":"90s","rpe":8}]}]}';
+    var text=await _aiCall(prompt, 2400);
+    if(!text) return;
+    var jm=text.match(/\{[\s\S]*\}/); if(!jm) throw new Error('La IA no devolvio JSON');
+    var parsed=JSON.parse(jm[0]);
+    if(!parsed.days||!parsed.days.length) throw new Error('La IA no devolvio dias');
+    S.customDays=parsed.days; Store.save();
+    var te=document.getElementById('s-training'); if(te){te._r=0;rTrain();}
+    notif('Rutina generada','Protocolo '+protocol+' listo','\u2728');
+  }catch(e){ console.error('[genRoutineAI]',e); notif('Error IA',(e&&e.message)||'No se pudo generar','\u26A0'); }
+  finally{ var l=document.getElementById('v36-rout-load'); if(l) l.remove(); }
+}
+
+/* ---- (pt4) LIMPIAR: dieta / rutina / objetivos ---- */
+function limpiarDieta(){
+  if(!confirm('¿Borrar toda la dieta actual (comidas, macros y reglas)?')) return;
+  S.meals=null; S.dietRules=null;
+  ['calories','protein','carbs','fat'].forEach(function(k){ if(S.nutrition[k]) S.nutrition[k].current=0; });
+  Store.save();
+  var ne=document.getElementById('s-nutrition'); if(ne){ne._r=0;renderNutrition();}
+  notif('Dieta borrada','Genera una nueva con IA o edítala','&#x1F5D1;');
+}
+function limpiarRutina(){
+  if(!confirm('¿Borrar toda la rutina actual?')) return;
+  S.customDays=null; Store.save();
+  var te=document.getElementById('s-training'); if(te){te._r=0;rTrain();}
+  notif('Rutina borrada','Genera una nueva con IA','&#x1F5D1;');
+}
+function limpiarObjetivos(){
+  if(!confirm('¿Borrar todos los objetivos de la lista?')) return;
+  S.goals=[]; Store.save();
+  if(typeof rGoals==='function') rGoals();
+  notif('Objetivos borrados','Agrega los que quieras','&#x1F5D1;');
+}
+
+/* ---- (pt3) TARJETA HERO REDISEÑADA (centrada, español, honesta, con objetivo+fecha) ---- */
+(function(){
+  var css=document.createElement('style');
+  css.textContent=
+   '.v39-hero{text-align:center;padding:22px 18px 20px;border-radius:20px;position:relative;'
+  +'background:radial-gradient(120% 100% at 50% 0%,rgba(139,92,255,.16),transparent 70%),rgba(255,255,255,.02);'
+  +'border:1px solid rgba(255,255,255,.07);}'
+  +'.v39-hi{font-size:24px;font-weight:800;letter-spacing:-.4px;color:var(--t1);'
+  +'font-family:-apple-system,BlinkMacSystemFont,sans-serif;}'
+  +'.v39-hi span{background:linear-gradient(120deg,#8b5cff,#ff2d95,#ff7a1a);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}'
+  +'.v39-sub{font-size:12.5px;color:var(--t3);margin-top:6px;line-height:1.45;max-width:300px;margin-left:auto;margin-right:auto;}'
+  +'.v39-goal-lbl{font-size:9px;letter-spacing:2px;color:var(--t3);font-family:var(--mono);margin:18px 0 9px;}'
+  +'.v39-pills{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;}'
+  +'.v39-pill{padding:8px 14px;border-radius:999px;font-size:11.5px;font-weight:600;cursor:pointer;'
+  +'border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.03);color:var(--t2);'
+  +'font-family:-apple-system,BlinkMacSystemFont,sans-serif;transition:transform .12s;-webkit-tap-highlight-color:transparent;}'
+  +'.v39-pill:active{transform:scale(.94);}'
+  +'.v39-pill.on{background:linear-gradient(120deg,#8b5cff,#ff2d95,#ff7a1a);color:#fff;border-color:transparent;box-shadow:0 6px 18px rgba(255,45,149,.32);}'
+  +'.v39-target{display:flex;justify-content:center;gap:26px;margin-top:20px;}'
+  +'.v39-tnum{font-size:30px;font-weight:800;color:var(--t1);line-height:1;font-variant-numeric:tabular-nums;}'
+  +'.v39-tu{font-size:11px;color:var(--t3);margin-top:3px;letter-spacing:1px;font-family:var(--mono);}'
+  +'.v39-upd{margin-top:18px;font-size:10px;color:var(--t3);font-family:var(--mono);border-top:1px solid rgba(255,255,255,.05);padding-top:12px;}';
+  document.head.appendChild(css);
+
+  renderBrief=function(){
+    var el=document.getElementById('s-brief'); if(!el) return;
+    var u=S.user||{}, hrs=new Date().getHours();
+    var saludo=hrs<12?'Buenos días':hrs<19?'Buenas tardes':'Buenas noches';
+    var nCi=(S.checkins&&S.checkins.length)||0;
+    var sub = nCi>0
+      ? (nCi+' check-in'+(nCi>1?'s':'')+' registrado'+(nCi>1?'s':'')+' · sigue subiendo foto y midiendo para ver tu evolución.')
+      : 'Elige tu objetivo, sube tu foto y registra tus medidas reales para empezar. Aquí no se inventa nada.';
+    var gt=u.goalType||'Recomposición';
+    var pills=(window.GOAL_TYPES||['Recomposición']).map(function(g){
+      return '<button class="v39-pill'+(g===gt?' on':'')+'" onclick="setGoalType(\''+g.replace(/'/g,"\\'")+'\')">'+g+'</button>';
+    }).join('');
+    var upd=_fmtFecha(S.updatedAt);
+    el.innerHTML=
+      '<div class="v39-hero">'
+      +'<div class="v39-hi">'+saludo+', <span>Dave</span></div>'
+      +'<div class="v39-sub">'+sub+'</div>'
+      +'<div class="v39-goal-lbl">MI OBJETIVO</div>'
+      +'<div class="v39-pills">'+pills+'</div>'
+      +'<div class="v39-target">'
+        +'<div><div class="v39-tnum">'+(u.targetWeight||78)+'</div><div class="v39-tu">KG META</div></div>'
+        +'<div><div class="v39-tnum">'+(u.targetBF||10)+'</div><div class="v39-tu">% GRASA</div></div>'
+      +'</div>'
+      +'<div class="v39-upd">'+(upd?('Última actualización: '+upd):'Sin actualizaciones aún — registra tu primer progreso')+'</div>'
+      +'</div>';
+  };
+  setGoalType=function(g){
+    if(!S.user) S.user={}; S.user.goalType=g; Store.save();
+    renderBrief();
+    notif('Objetivo actualizado',g,'\u25CE');
+  };
+})();
+
+/* ---- (pt4) INYECTAR BOTONES "LIMPIAR" en dieta / rutina / objetivos ---- */
+(function(){
+  var _rn=renderNutrition;
+  renderNutrition=function(){
+    _rn.apply(this,arguments);
+    var el=document.getElementById('s-nutrition'); if(!el) return;
+    var hasMeals=S.meals&&['breakfast','lunch','dinner','snacks'].some(function(k){return (S.meals[k]||[]).length;});
+    if(hasMeals && !document.getElementById('v39-clr-diet')){
+      var d=document.createElement('div'); d.style.cssText='margin-top:10px;';
+      d.innerHTML='<button id="v39-clr-diet" onclick="limpiarDieta()" style="width:100%;background:rgba(255,45,90,.08);border:1px solid rgba(255,45,90,.25);color:#ff6b81;border-radius:12px;padding:10px;font-size:12px;font-weight:600;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif;">&#x1F5D1; Limpiar dieta</button>';
+      el.appendChild(d);
+    }
+  };
+  var _rt=rTrain;
+  rTrain=function(){
+    _rt.apply(this,arguments);
+    var el=document.getElementById('s-training'); if(!el) return;
+    var has=S.customDays&&S.customDays.length;
+    if(has && !document.getElementById('v39-clr-rout')){
+      var d=document.createElement('div'); d.style.cssText='margin-top:10px;';
+      d.innerHTML='<button id="v39-clr-rout" onclick="limpiarRutina()" style="width:100%;background:rgba(255,45,90,.08);border:1px solid rgba(255,45,90,.25);color:#ff6b81;border-radius:12px;padding:10px;font-size:12px;font-weight:600;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif;">&#x1F5D1; Limpiar rutina</button>';
+      el.appendChild(d);
+    }
+  };
+  if(typeof rGoals==='function'){
+    var _rg=rGoals;
+    rGoals=function(){
+      _rg.apply(this,arguments);
+      var el=document.getElementById('s-goals'); if(!el) return;
+      if((S.goals&&S.goals.length) && !document.getElementById('v39-clr-goals')){
+        var d=document.createElement('div'); d.style.cssText='margin-top:10px;';
+        d.innerHTML='<button id="v39-clr-goals" onclick="limpiarObjetivos()" style="width:100%;background:rgba(255,45,90,.08);border:1px solid rgba(255,45,90,.25);color:#ff6b81;border-radius:12px;padding:10px;font-size:12px;font-weight:600;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif;">&#x1F5D1; Limpiar objetivos</button>';
+        el.appendChild(d);
+      }
+    };
+  }
+})();
+
+/* ---- versión ---- */
+try{ APP_VERSION="v39"; APP_BUILD="2026-08-19";
+  var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+}catch(e){}
+
 </script>
 
   <button id="ai-chat-btn" onclick="toggleChat()" title="Coach AI">&#x1F4AC;</button>
