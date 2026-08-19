@@ -993,6 +993,64 @@ body:has(#ai-chat-panel.open) #v30-nav{display:none !important;}
   .btn, .add-item-btn{min-height:38px !important;}
 }
 
+
+/* ═══════════════════════════════════════════════════════════════
+   V35 — SISTEMA DE DISEÑO iOS-NATIVO
+   Tokens coherentes (spacing 4pt, radios, sombras, easing iOS),
+   cards uniformes, tipografía, estados de presión, transiciones.
+   ═══════════════════════════════════════════════════════════════ */
+:root{
+  --sp1:4px; --sp2:8px; --sp3:12px; --sp4:16px; --sp5:20px; --sp6:24px;
+  --r-sm:12px; --r-md:16px; --r-lg:22px; --r-pill:999px;
+  --sh-1:0 1px 4px rgba(0,0,0,.28);
+  --sh-2:0 6px 20px rgba(0,0,0,.32);
+  --sh-3:0 16px 44px rgba(0,0,0,.45);
+  --ease:cubic-bezier(.32,.72,0,1);
+}
+body{ -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; text-rendering:optimizeLegibility; }
+
+/* ---- Cards y containers coherentes ---- */
+.card{ border-radius:var(--r-md) !important; box-shadow:var(--sh-2) !important; }
+.mi,.bmet-card-col,.air,.ai-scan-result{ border-radius:var(--r-sm) !important; }
+
+/* ---- Transiciones suaves en todo lo interactivo ---- */
+.btn,.btn-glow,.btn-goal-glow,.mi,.bmet-card-col,.v30-tab,.card,.add-item-btn,.chip-item-rm,#ai-chat-btn,.at{
+  transition:transform .22s var(--ease), box-shadow .25s var(--ease), background .2s var(--ease), opacity .2s !important;
+}
+/* ---- Estado de PRESIÓN (feedback táctil iOS) ---- */
+.btn:active,.btn-glow:active,.btn-goal-glow:active,.mi:active,.bmet-card-col:active,
+.v30-tab:active,.add-item-btn:active,#ai-chat-btn:active,.pt:active,.mx:active{ transform:scale(.955) !important; }
+.card:active{ transform:scale(.99) !important; }
+/* ---- Estado DESHABILITADO ---- */
+button:disabled,.btn:disabled,.disabled{ opacity:.4 !important; pointer-events:none !important; filter:grayscale(.3); }
+
+/* ---- Barra de navegación: proporciones iOS ---- */
+#v30-nav{ padding-top:6px !important; box-shadow:0 -1px 0 rgba(255,255,255,.06), 0 -10px 30px rgba(0,0,0,.4) !important; }
+.v30-tab{ gap:4px !important; padding:7px 0 6px !important; font-size:10px !important; letter-spacing:.2px !important; }
+.v30-tab svg{ width:25px; height:25px; display:block; }
+.v30-tab .lbl{ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif !important; font-weight:600; }
+.v30-tab.active::before{ width:0 !important; height:0 !important; } /* quitamos la barrita, iOS no la usa */
+
+/* ---- Chat: panel equilibrado como hoja ---- */
+#ai-chat-panel{ box-shadow:var(--sh-3) !important; }
+.chat-hd{ background:linear-gradient(180deg,rgba(28,16,51,.6),transparent) !important; border-bottom:1px solid rgba(255,255,255,.06) !important; }
+.chat-hd-t{ font-family:-apple-system,BlinkMacSystemFont,sans-serif !important; font-weight:700 !important; letter-spacing:.3px !important; font-size:15px !important; color:var(--t1) !important; text-transform:none !important; }
+.chat-msg{ border-radius:18px !important; padding:11px 14px !important; line-height:1.4 !important; max-width:82% !important; }
+.chat-msg.user{ border-bottom-right-radius:5px !important; }
+.chat-msg.ai{ border-bottom-left-radius:5px !important; }
+
+/* ---- Header de modales: título más iOS ---- */
+.mt{ font-family:-apple-system,BlinkMacSystemFont,sans-serif !important; font-weight:700 !important; letter-spacing:.2px !important; text-transform:none !important; }
+
+/* ---- Topbar botón principal: proporción pill iOS ---- */
+#topbar .btn-glow{ border-radius:var(--r-pill) !important; padding:8px 16px !important; font-size:11px !important; }
+
+@media(max-width:768px){
+  .card{ border-radius:var(--r-md) !important; padding:16px !important; }
+  .st{ font-size:22px !important; }
+  #v30-nav .v30-tab .lbl{ font-size:10px; }
+}
+
 </style>
 
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -4891,7 +4949,7 @@ _buildBody=function(msgs, maxTok, sysPrompt){
    Muestra la versión en el topbar para confirmar qué está desplegado
    tras cada subida a GitHub. Sube este número en cada cambio nuevo.
    ═══════════════════════════════════════════════════════════════ */
-var APP_VERSION="v34";
+var APP_VERSION="v35";
 var APP_BUILD="2026-08-17";
 (function(){
   try{ console.log("%c◈ Project Liberato Fitness "+APP_VERSION+" · "+APP_BUILD,"color:#ff2d95;font-weight:bold;font-size:13px;"); }catch(e){}
@@ -4900,15 +4958,45 @@ var APP_BUILD="2026-08-17";
     var tb=document.getElementById('topbar'); if(!tb) return;
     var s=document.createElement('div'); s.id='v33-badge';
     s.textContent=APP_VERSION+" · "+APP_BUILD;
-    s.style.cssText='position:absolute;bottom:4px;left:50%;transform:translateX(-50%);'
-      +'font-family:var(--mono);font-size:9px;letter-spacing:.5px;color:#ff2d95;opacity:.95;'
-      +'pointer-events:none;white-space:nowrap;background:rgba(255,45,149,.14);'
-      +'padding:2px 9px;border-radius:9px;border:1px solid rgba(255,45,149,.35);';
+    s.style.cssText='position:absolute;bottom:3px;left:14px;'
+      +'font-family:var(--mono);font-size:8px;letter-spacing:.4px;color:var(--t3);opacity:.6;'
+      +'pointer-events:none;white-space:nowrap;';
     if(getComputedStyle(tb).position==='static') tb.style.position='relative';
     tb.appendChild(s);
   }
   var t=0,iv=setInterval(function(){t++; if(document.getElementById('topbar')){tag();clearInterval(iv);} if(t>40)clearInterval(iv);},350);
   window.addEventListener('load',tag);
+})();
+
+
+/* ═══════════════════════════════════════════════════════════════
+   V35 JS — ICONOS SVG NATIVOS en la barra de navegación
+   Reemplaza los emojis por íconos de línea monocromáticos (heredan
+   el color activo). Mismo sistema visual, tamaño óptico consistente.
+   ═══════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v35) return; window.__v35=true;
+  var S_='stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"';
+  var ICONS={
+    's-brief':'<svg viewBox="0 0 24 24" '+S_+'><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/></svg>',
+    's-body':'<svg viewBox="0 0 24 24" '+S_+'><circle cx="12" cy="6" r="3.2"/><path d="M5.5 20.5c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5"/></svg>',
+    's-nutrition':'<svg viewBox="0 0 24 24" '+S_+'><path d="M7 3v6c0 1.2-1 1.6-1 2.8V21"/><path d="M5 3v4M9 3v4"/><path d="M16.5 3C15 3 14 5.2 14 7.7S15.4 12 16.5 12v9"/></svg>',
+    's-training':'<svg viewBox="0 0 24 24" '+S_+'><path d="M3 9v6M6 7.5v9M18 7.5v9M21 9v6M6.5 12h11"/></svg>',
+    's-timeline':'<svg viewBox="0 0 24 24" '+S_+'><path d="M4 4v16h16"/><path d="M7.5 14.5l3.2-3.8 3 2.4L20 7"/></svg>'
+  };
+  function swap(){
+    var nav=document.getElementById('v30-nav'); if(!nav) return false;
+    var tabs=nav.querySelectorAll('.v30-tab'); if(!tabs.length) return false;
+    tabs.forEach(function(t){
+      var key=t.getAttribute('data-t');
+      var ic=t.querySelector('.ic'); var lb=t.querySelector('span:last-child');
+      if(ic && ICONS[key]){ ic.innerHTML=ICONS[key]; ic.style.cssText='display:flex;align-items:center;justify-content:center;'; }
+      if(lb) lb.className='lbl';
+    });
+    return true;
+  }
+  var t=0, iv=setInterval(function(){ t++; if(swap()||t>40) clearInterval(iv); }, 300);
+  window.addEventListener('load',function(){ setTimeout(swap,500); });
 })();
 
 </script>
