@@ -6288,7 +6288,7 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
     } else {
       var content2=[{type:'text',text:prompt}];
       images.forEach(function(im){ content2.push({type:'image_url',image_url:{url:'data:'+im.mime+';base64,'+im.b64}}); });
-      body={model:model,max_tokens:(p==='groq')?Math.max(maxTokens||0,1400):(maxTokens||1200),messages:[{role:'user',content:content2}]};
+      body={model:model,max_tokens:(p==='groq')?Math.max(maxTokens||0,900):(maxTokens||1200),messages:[{role:'user',content:content2}]};
       if(p==='groq') body.reasoning_effort='none';
     }
     var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
@@ -6319,10 +6319,10 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
       return;
     }
     /* recopilar TODAS las fotos disponibles */
-    /* Groq free tier: 2 imágenes caben en el límite TPM. Priorizar frente + espalda */
-    var keys=['p1','p3','p2','main','p4'], labels={main:'principal',p1:'frente',p2:'lado izq',p3:'espalda',p4:'lado der'};
+    /* Modelo acepta máx 3 imágenes (~1808 tok c/u, fijo). 3 caben en 8000 TPM. Frente+espalda+lado */
+    var keys=['p1','p3','p2','p4','main'], labels={main:'principal',p1:'frente',p2:'lado izq',p3:'espalda',p4:'lado der'};
     var imgs=[];
-    keys.forEach(function(k){ if(imgs.length>=2) return; var d=S.photos&&S.photos[k];
+    keys.forEach(function(k){ if(imgs.length>=3) return; var d=S.photos&&S.photos[k];
       if(d&&d.indexOf('data:')===0){ imgs.push({b64:d.split(',')[1], mime:(d.split(';')[0].split(':')[1])||'image/jpeg', tag:labels[k]||k}); } });
     if(!imgs.length){
       if(res) res.innerHTML='<div style="color:var(--orange);font-size:12px;margin-top:10px;">⚠ Sube al menos una foto (idealmente 4: frente, lado, espalda, lado) en el Body Scanner.</div>';
@@ -6340,7 +6340,7 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
       +'"vTaper":"texto corto","symmetry":"balanced|left|right","weakPoints":["z1","z2"],'
       +'"goalGap":"1-2 frases: que falta para tu meta y en que enfocar","confidence":"low|medium|high","warning":"texto o vacio"}';
     try{
-      var text=await _aiCallVisionMulti(prompt, 1100, imgs);
+      var text=await _aiCallVisionMulti(prompt, 900, imgs);
       if(text===null){ if(btn){btn.classList.remove('loading');btn.innerHTML='<span>&#x26A1;</span> Escanear con IA';} return; }
       var jm=text.match(/\{[\s\S]*\}/); if(!jm) throw new Error('La IA no devolvió JSON');
       var v=JSON.parse(jm[0]);
@@ -6410,6 +6410,150 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
       }catch(e){}
     };
   }
+})();
+
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V42 — PROTECCIÓN DE DATOS ANTE BORRADO DE CACHÉ
+   (1) navigator.storage.persist(): pide al navegador NO borrar los datos
+       automáticamente (elimina el riesgo del borrado de ~7 días de iOS).
+   (2) Copia de seguridad / Restaurar: exporta TODO tu historial a un
+       archivo (vía menú compartir de iOS → Archivos/iCloud) y lo restaura.
+   (3) Recordatorio si llevas muchos días sin respaldar.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v42) return; window.__v42=true;
+
+  /* --- (1) persistencia --- */
+  window._persistState={requested:false, granted:null};
+  async function _reqPersist(){
+    try{
+      if(navigator.storage && navigator.storage.persisted){
+        var already=await navigator.storage.persisted();
+        if(already){ _persistState.granted=true; return; }
+      }
+      if(navigator.storage && navigator.storage.persist){
+        _persistState.requested=true;
+        _persistState.granted=await navigator.storage.persist();
+      }
+    }catch(e){ _persistState.granted=null; }
+    try{ var b=document.getElementById('v42-persist'); if(b) _paintPersist(); }catch(e){}
+  }
+
+  /* --- (2) ensamblar backup completo --- */
+  function _fullBackup(){
+    return {
+      version:'LIBERATO_v42', app:(typeof APP_VERSION!=='undefined'?APP_VERSION:''),
+      exportDate:new Date().toISOString(),
+      data:{
+        user:S.user, metrics:S.metrics, checkins:S.checkins, nutrition:S.nutrition,
+        recovery:S.recovery, lifestyle:S.lifestyle, goals:S.goals, logs:(S.logs||[]).slice(0,80),
+        meals:S.meals, customDays:S.customDays, dietRules:S.dietRules, customRules:S.customRules,
+        photos:S.photos
+      }
+    };
+  }
+  window._v42Backup=async function(){
+    try{
+      var payload=JSON.stringify(_fullBackup(),null,2);
+      var fname='liberato_fitness_'+new Date().toISOString().split('T')[0]+'.json';
+      var file=new File([payload],fname,{type:'application/json'});
+      try{ localStorage.setItem('_lastBackup', new Date().toISOString()); }catch(e){}
+      /* iOS: compartir el archivo (Archivos/iCloud/AirDrop) */
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        await navigator.share({files:[file], title:'Backup Liberato Fitness'});
+        notif('Copia lista','Guárdala en Archivos o iCloud','&#x1F6E1;');
+        _paintPersist(); return;
+      }
+      /* fallback: descarga */
+      var url=URL.createObjectURL(new Blob([payload],{type:'application/json'}));
+      var a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click();
+      setTimeout(function(){URL.revokeObjectURL(url); a.remove();},1500);
+      notif('Copia descargada',fname,'&#x1F4BE;'); _paintPersist();
+    }catch(e){ if(e&&e.name==='AbortError') return; console.error('[v42Backup]',e); notif('No se pudo respaldar',(e&&e.message)||'error','&#x26A0;'); }
+  };
+  window._v42Restore=function(){
+    var inp=document.createElement('input'); inp.type='file'; inp.accept='.json,application/json';
+    inp.onchange=function(e){
+      var f=e.target.files&&e.target.files[0]; if(!f) return;
+      var rd=new FileReader();
+      rd.onload=function(ev){
+        try{
+          var bk=JSON.parse(ev.target.result); var d=bk.data||bk;
+          if(!d||typeof d!=='object') throw new Error('Archivo inválido');
+          if(d.user) S.user=Object.assign(S.user||{},d.user);
+          if(d.metrics) Object.assign(S.metrics,d.metrics);
+          if(d.checkins) S.checkins=d.checkins;
+          if(d.nutrition) Object.assign(S.nutrition,d.nutrition);
+          if(d.recovery) Object.assign(S.recovery,d.recovery);
+          if(d.lifestyle) Object.assign(S.lifestyle,d.lifestyle);
+          if(d.goals) S.goals=d.goals;
+          if(d.logs) S.logs=d.logs;
+          if(d.meals) S.meals=d.meals;
+          if(d.customDays) S.customDays=d.customDays;
+          if(d.dietRules) S.dietRules=d.dietRules;
+          if(d.customRules) S.customRules=d.customRules;
+          if(d.photos){ S.photos=Object.assign(S.photos||{},d.photos);
+            try{ Object.keys(d.photos).forEach(function(k){ if(d.photos[k]&&typeof idbSavePhoto==='function') idbSavePhoto(k,d.photos[k]); }); }catch(_){} }
+          Store.save();
+          try{ render&&render(); }catch(_){}
+          try{ renderBrief();renderBodyCol();rGoals&&rGoals();rTimeline&&rTimeline();
+            var ne=document.getElementById('s-nutrition');if(ne){ne._r=0;renderNutrition();}
+            var te=document.getElementById('s-training');if(te){te._r=0;rTrain();} }catch(_){}
+          notif('Datos restaurados','Tu historial fue recuperado','&#x2705;');
+        }catch(err){ notif('Error al restaurar',err.message||'archivo inválido','&#x274C;'); }
+      };
+      rd.readAsText(f);
+    };
+    inp.click();
+  };
+
+  /* --- (3) fila de estado + acciones en el hero --- */
+  function _daysSinceBackup(){
+    try{ var l=localStorage.getItem('_lastBackup'); if(!l) return null;
+      return Math.floor((Date.now()-new Date(l).getTime())/86400000); }catch(e){ return null; }
+  }
+  window._paintPersist=function(){
+    var box=document.getElementById('v42-persist'); if(!box) return;
+    var g=_persistState.granted;
+    var icon=g===true?'🛡️':g===false?'⚠️':'💾';
+    var txt=g===true?'Datos protegidos contra borrado automático'
+           :g===false?'El navegador podría borrar datos si no abres la app seguido'
+           :'Almacenamiento local';
+    var dsb=_daysSinceBackup();
+    var backupLine=(dsb===null)?'Nunca has hecho una copia de seguridad'
+      :(dsb===0?'Última copia: hoy':('Última copia: hace '+dsb+' día'+(dsb>1?'s':'')));
+    var warn=(dsb===null||dsb>=10);
+    box.innerHTML=
+      '<div style="display:flex;align-items:center;gap:7px;justify-content:center;font-size:10.5px;color:'+(g===false?'#ffa64d':'var(--t3)')+';">'
+      +'<span>'+icon+'</span><span>'+txt+'</span></div>'
+      +'<div style="font-size:10px;color:'+(warn?'#ffa64d':'var(--t3)')+';text-align:center;margin-top:5px;">'+backupLine+'</div>'
+      +'<div style="display:flex;gap:8px;justify-content:center;margin-top:9px;">'
+      +'<button onclick="_v42Backup()" style="background:rgba(139,92,255,.14);border:1px solid rgba(139,92,255,.4);color:#c9b8ff;border-radius:10px;padding:8px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif;">🛡️ Copia de seguridad</button>'
+      +'<button onclick="_v42Restore()" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);color:var(--t2);border-radius:10px;padding:8px 14px;font-size:11px;font-weight:600;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif;">↺ Restaurar</button>'
+      +'</div>';
+  };
+
+  /* añadir la fila al hero (envolver renderBrief) */
+  var _rb=renderBrief;
+  renderBrief=function(){
+    _rb.apply(this,arguments);
+    var el=document.getElementById('s-brief'); if(!el) return;
+    var hero=el.querySelector('.v39-hero'); if(!hero || hero.querySelector('#v42-persist')) return;
+    var d=document.createElement('div'); d.id='v42-persist';
+    d.style.cssText='margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.06);';
+    hero.appendChild(d);
+    _paintPersist();
+  };
+
+  window.addEventListener('load', function(){ setTimeout(_reqPersist, 800); });
+  setTimeout(_reqPersist, 1500);
+
+  /* versión */
+  try{ APP_VERSION="v42"; APP_BUILD="2026-08-19";
+    var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+  }catch(e){}
 })();
 
 </script>
