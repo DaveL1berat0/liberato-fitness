@@ -3689,7 +3689,7 @@ function setupOnInput(val){
   var st=document.getElementById('setup-status');
   val=val.trim();
   var pName='';
-  if(val.indexOf('gsk_')===0) pName='Groq (llama-3.3-70b)';
+  if(val.indexOf('gsk_')===0) pName='Groq (qwen3.6-27b)';
   else if(val.indexOf('sk-ant-')===0) pName='Anthropic (Claude)';
   else if(val.indexOf('sk-')===0) pName='OpenAI (GPT)';
   if(pName){
@@ -5365,10 +5365,79 @@ async function genRoutineAI(protocol){
 })();
 
 /* ── Versión ── */
-try{ APP_VERSION="v36"; APP_BUILD="2026-08-19";
+try{ APP_VERSION="v37"; APP_BUILD="2026-08-19";
   var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
   console.log("%c◈ Project Liberato Fitness "+APP_VERSION+" · "+APP_BUILD,"color:#ff2d95;font-weight:bold;font-size:13px;");
 }catch(e){}
+
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V37 — FIX MODELO DE TEXTO GROQ (19-ago-2026)
+   La cuenta ya no tiene 'llama-3.3-70b-versatile' → todas las llamadas de
+   texto daban "model does not exist". Se unifica en 'qwen/qwen3.6-27b'
+   (verificado en vivo). qwen razona antes de responder (~700 tokens de
+   reasoning), así que para Groq se activa reasoning_format:'hidden' y se
+   da margen de tokens también en TEXTO, no solo en imagen.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v37) return; window.__v37=true;
+
+  /* Modelo de texto Groq -> qwen (el único chat+visión de la cuenta) */
+  var _origCfg=_getApiConfig;
+  _getApiConfig=function(){
+    var c=_origCfg.apply(this,arguments);
+    if(_getProvider()==='groq' && c && /llama-3\.3/.test(c.model||'')){
+      c.model='qwen/qwen3.6-27b';
+    }
+    return c;
+  };
+
+  /* _buildBody: para Groq (texto o imagen) ocultar reasoning y dar margen.
+     Conserva historial del Coach y conversión de imágenes. */
+  _buildBody=function(msgs, maxTok, sysPrompt){
+    var cfg=_getApiConfig();
+    var withImg=(typeof _msgsHaveImage==='function')?_msgsHaveImage(msgs):false;
+    var p=_getProvider();
+    var model = withImg ? _getVisionModel() : cfg.model;
+    if(sysPrompt && /Coach AI/.test(sysPrompt) && typeof _progressSummary==='function'){
+      sysPrompt = sysPrompt + _progressSummary();
+    }
+    if(cfg.fmt==='openai'){
+      var all=sysPrompt?[{role:'system',content:sysPrompt}]:[];
+      var conv=msgs.map(function(m){
+        if(!Array.isArray(m.content)) return m;
+        return {role:m.role, content:m.content.map(function(b){
+          if(b && b.type==='image' && b.source && b.source.type==='base64')
+            return {type:'image_url', image_url:{url:'data:'+b.source.media_type+';base64,'+b.source.data}};
+          return b;
+        })};
+      });
+      all=all.concat(conv);
+      var body={model:model, max_tokens:maxTok, messages:all};
+      if(p==='groq'){
+        if(withImg){
+          /* visión: qwen razona; ocultar y dar margen (verificado) */
+          body.max_tokens=Math.max(maxTok||0,1500);
+          body.reasoning_format='hidden';
+        }else{
+          /* texto: desactivar razonamiento -> JSON directo, sin gastar tokens */
+          body.max_tokens=Math.max(maxTok||0,1024);
+          body.reasoning_effort='none';
+        }
+      }
+      return JSON.stringify(body);
+    }
+    var b={model:model, max_tokens:maxTok, messages:msgs};
+    if(sysPrompt) b.system=sysPrompt;
+    return JSON.stringify(b);
+  };
+
+  /* Etiqueta cosmética del proveedor en el setup */
+  try{
+    var _oProbe=window.setupOnInput;
+  }catch(e){}
+})();
 
 </script>
 
