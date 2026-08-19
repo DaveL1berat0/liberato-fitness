@@ -158,7 +158,7 @@ body::before{content:'';position:fixed;inset:0;
 .tgl::after{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:2px;left:2px;transition:transform .2s;}
 .tgl.on::after{transform:translateX(14px);}
 .air{background:linear-gradient(135deg,rgba(0,229,255,.04),rgba(41,121,255,.04));border:1px solid rgba(0,229,255,.18);border-radius:var(--r);padding:16px;position:relative;}
-.air::before{content:'AI ANALYSIS';position:absolute;top:-1px;left:14px;font-size:8px;letter-spacing:2px;color:var(--cyan);background:var(--bk2);padding:0 6px;font-family:var(--mono);}
+.air::before{content:'ANÁLISIS IA';position:absolute;top:-1px;left:14px;font-size:8px;letter-spacing:2px;color:var(--cyan);background:var(--bk2);padding:0 6px;font-family:var(--mono);}
 .ait{font-size:12px;color:var(--t2);line-height:1.75;margin-bottom:12px;}
 .at{display:inline-block;padding:3px 8px;border-radius:3px;font-size:10px;font-family:var(--mono);margin-right:5px;margin-bottom:5px;}
 .ap{background:rgba(0,255,136,.08);color:var(--green);border:1px solid rgba(0,255,136,.2);}
@@ -1149,10 +1149,10 @@ var S={
   recovery:{sleep:7.5,energy:78,stress:32,hydration:72,recovery:81,readiness:85},
   lifestyle:{sleep:false,walking:true,sunlight:true,meditation:false,stretching:false,mobility:false,reading:true,coldShower:false,alcohol:false,cheatMeal:false},
   goals:[
-    {id:1,name:'Reach 10% Body Fat',icon:'◎',current:12,target:10,unit:'%',priority:'HIGH',eta:'45 days',progress:40,color:'cyan'},
-    {id:2,name:'Gain 4kg Lean Mass',icon:'◉',current:40,target:44,unit:'kg',priority:'HIGH',eta:'90 days',progress:25,color:'green'},
-    {id:3,name:'Reach 78kg Weight',icon:'◆',current:73.9,target:78,unit:'kg',priority:'MED',eta:'60 days',progress:0,color:'blue'},
-    {id:4,name:'Improve Shoulders',icon:'◇',current:105,target:112,unit:'cm',priority:'MED',eta:'120 days',progress:30,color:'purple'},
+    {id:1,name:'Llegar a 10% de grasa',icon:'◎',current:12,target:10,unit:'%',priority:'HIGH',eta:'45 days',progress:40,color:'cyan'},
+    {id:2,name:'Ganar 4kg de músculo',icon:'◉',current:40,target:44,unit:'kg',priority:'HIGH',eta:'90 days',progress:25,color:'green'},
+    {id:3,name:'Llegar a 78kg',icon:'◆',current:73.9,target:78,unit:'kg',priority:'MED',eta:'60 days',progress:0,color:'blue'},
+    {id:4,name:'Mejorar hombros',icon:'◇',current:105,target:112,unit:'cm',priority:'MED',eta:'120 days',progress:30,color:'purple'},
   ],
   photos:{main:null,p1:null,p2:null,p3:null,p4:null},
   logs:[],
@@ -1243,64 +1243,63 @@ function clock(){const el=document.getElementById('tb-t');if(el)el.textContent=n
 
 // TRAINING
 function rTrain(){
-  const el=document.getElementById('s-training');
-  const dys=[
-    {nm:'Mon',ty:'PUSH',tg:'dp',ex:'Basketball 🏀',xs:[['Incline DB Press','3×8–10'],['Bench Press','2×6–8'],['Cable Fly','2×12–15'],['Lateral Raises','3×15–20'],['Triceps Pushdown','2×10–15']]},
-    {nm:'Tue',ty:'PULL',tg:'dl',ex:'+ Abs 💪',xs:[['Lat Pulldown','3×6–10'],['Chest Row','3×6–10'],['DB Row','2×8–12'],['Incline Curls','2×10–15'],['Hanging Leg Raises','3×10–15'],['Cable Crunch','3×12–15']]},
-    {nm:'Wed',ty:'LEGS',tg:'dlg',ex:'Basketball 🏀',xs:[['Barbell Squat','3×5–8'],['Romanian DL','3×6–10'],['Leg Extension','2×12–15'],['Leg Curl','2×12–15']]},
-    {nm:'Thu',ty:'UPPER',tg:'du',ex:'Padel 🎾',xs:[['Incline DB Press','2×8–12'],['Close Grip Pull','2×8–12'],['Cable Fly','2×12–15'],['Lateral Raises','2×15–20'],['Cable Curls','2×10–15'],['OH Triceps','2×10–15']]},
-    {nm:'Fri',ty:'LOWER',tg:'dlo',ex:'',xs:[['Hack Squat','3×6–10'],['Bulgarian Split','2×8–12'],['Leg Curl','2×12–15'],['Hip Thrust','2×8–12']]},
-    {nm:'Sat',ty:'CARDIO',tg:'dc2',ex:'Padel 🎾',xs:[['Padel Match','60–90 min'],['Active Recovery','Stretch']]},
-    {nm:'Sun',ty:'REST',tg:'dr',ex:'Walk optional',xs:[['Light Walk','20–30 min'],['Core (optional)','10 min']]},
-  ];
-  const todayIdx=(new Date().getDay()+6)%7;
-  var modBtn='<div style="text-align:right;margin-top:12px;"><button class="btn-glow" onclick="openModifyTraining()" style="border-radius:6px;font-size:9px;padding:7px 16px;letter-spacing:2px;">&#x270E; Modificar Rutina</button></div>';
-  el.innerHTML=modBtn+'\n'+`
-<div class="sh"><div><div class="st">Training Engine</div><div class="ss">Gym Vol.1 Abs · 5× gym + 3× cardio/week · 30–45 min sessions</div></div></div>
-<div class="card">
-  <div class="cl">Weekly Schedule</div>
-  <div class="wk">
-    ${dys.map((d,i)=>`<div class="dc ${i===todayIdx?'act':''} ${d.ty==='REST'?'rst':''}" onclick="this.classList.toggle('act')">
-      <div class="dn2">${d.nm}</div><div class="dtag ${d.tg}">${d.ty}</div>
-      ${d.ex?`<div style="font-size:9px;color:var(--t3);margin-top:4px;font-family:var(--mono);">${d.ex}</div>`:''}
-      <div class="de">${d.xs.map(([n2,s])=>`<div class="ei"><span class="en">${n2}</span><span class="es">${s}</span></div>`).join('')}</div>
-    </div>`).join('')}
-  </div>
-</div>
-<div class="g2 mt16">
-  <div class="card">
-    <div class="cl">Volume Per Muscle</div>
-    ${[['Chest','7 sets/wk',70,'pbl'],['Back/Lats','8 sets/wk',80,'pc'],['Shoulders','5 sets/wk',50,'pp'],['Arms','4 sets/wk',40,'pg2'],['Legs','10 sets/wk',100,'po'],['Core','6 sets/wk',60,'pc']].map(([n2,v,p2,c])=>`<div class="pw"><div class="ph2"><span class="pn">${n2}</span><span class="pv">${v}</span></div><div class="pb"><div class="pf ${c}" style="width:${p2}%"></div></div></div>`).join('')}
-  </div>
-  <div class="card">
-    <div class="cl">Protocol</div>
-    ${[['Sets/Muscle','5–12 / week'],['Frequency','2× per muscle'],['Intensity','High (1–2 RIR)'],['Rest','60–90 sec'],['Last Set','Near Failure'],['Duration','30–45 min'],['Cardio','3× / week'],['Phase','Recomposition']].map(([k,v])=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);"><span style="font-size:11px;color:var(--t3);font-family:var(--mono);">${k}</span><span style="font-size:11px;color:var(--cyan);font-family:var(--mono);">${v}</span></div>`).join('')}
-  </div>
-</div>`;
+  const el=document.getElementById('s-training'); if(!el) return;
+  var days=(typeof getActiveDays==='function')?getActiveDays():[];
+  var DAYMAP={MON:'Lun',TUE:'Mar',WED:'Mié',THU:'Jue',FRI:'Vie',SAT:'Sáb',SUN:'Dom',Mon:'Lun',Tue:'Mar',Wed:'Mié',Thu:'Jue',Fri:'Vie',Sat:'Sáb',Sun:'Dom'};
+  var MUS={Chest:'Pecho',Back:'Espalda',Lats:'Espalda',Shoulders:'Hombros',Biceps:'Brazos',Triceps:'Brazos',Arms:'Brazos',Quads:'Piernas',Hamstrings:'Piernas',Glutes:'Piernas',Legs:'Piernas',Calves:'Piernas',Core:'Core',Abs:'Core',Cardio:'Cardio',Recovery:'Recuperación'};
+  var vol={};
+  days.forEach(function(d){ (d.ex||[]).forEach(function(x){ var c=MUS[x.cat]||x.cat||'Otro'; vol[c]=(vol[c]||0)+(Number(x.sets)||0); }); });
+  var vk=Object.keys(vol).sort(function(a,b){return vol[b]-vol[a];});
+  var maxV=vk.length?vol[vk[0]]:1;
+  var totalSets=vk.reduce(function(s,k){return s+vol[k];},0);
+  var nDias=days.filter(function(d){return (d.ex||[]).length;}).length;
+  // tarjetas verticales por día con ejercicios SIEMPRE visibles
+  var cards=days.map(function(d){
+    var dn=DAYMAP[d.nm]||d.nm; var col=d.col||'#8b5cff';
+    var exs=(d.ex||[]).map(function(x){
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,.05);">'
+        +'<span style="font-size:12.5px;color:var(--t2);">'+(x.nm||'')+'</span>'
+        +'<span style="font-size:11px;color:var(--t3);font-family:var(--mono);white-space:nowrap;">'+(x.sets||'')+'×'+(x.reps||'')+(x.rpe?(' · RPE '+x.rpe):'')+'</span></div>';
+    }).join('');
+    return '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-left:3px solid '+col+';border-radius:14px;padding:13px 15px;margin-bottom:10px;">'
+      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">'
+      +'<span style="font-size:14px;font-weight:800;color:var(--t1);font-family:-apple-system,BlinkMacSystemFont,sans-serif;">'+dn+'</span>'
+      +'<span style="font-size:10px;font-weight:700;color:'+col+';background:'+col+'22;padding:3px 9px;border-radius:999px;letter-spacing:.5px;">'+(d.ty||'')+'</span>'
+      +(d.cd?'<span style="font-size:10px;color:var(--t3);font-family:var(--mono);">'+d.cd+'</span>':'')
+      +'<span style="margin-left:auto;font-size:10px;color:var(--t3);">'+(d.ex||[]).length+' ejercicios</span></div>'
+      +exs+'</div>';
+  }).join('');
+  var volHtml=vk.map(function(k){var p=Math.round(vol[k]/maxV*100);return '<div class="pw"><div class="ph2"><span class="pn">'+k+'</span><span class="pv">'+vol[k]+' series/sem</span></div><div class="pb"><div class="pf pc" style="width:'+p+'%"></div></div></div>';}).join('');
+  el.innerHTML=
+    '<div class="sh"><div><div class="st">Entrenamiento</div><div class="ss">'+nDias+' días · '+totalSets+' series/semana · según tu objetivo</div></div></div>'+
+    '<div style="margin-bottom:16px;">'+cards+'</div>'+
+    '<div class="card" style="margin-bottom:16px;"><div class="cl">Volumen por Músculo</div>'+(volHtml||'<div style="font-size:11px;color:var(--t3);">Sin datos</div>')+'</div>'+
+    '<div class="card"><div class="cl">Protocolo</div>'+
+    [['Series/músculo','10-20 / sem'],['Frecuencia','2× / músculo'],['Intensidad','Alta (1-3 RIR)'],['Descanso','60-90 seg'],['Última serie','Cerca del fallo'],['Duración','30-45 min'],['Enfoque','Basado en evidencia']].map(function(kv){return '<div style="display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--border);"><span style="font-size:11px;color:var(--t3);font-family:var(--mono);white-space:nowrap;">'+kv[0]+'</span><span style="font-size:11px;color:var(--cyan);font-family:var(--mono);text-align:right;">'+kv[1]+'</span></div>';}).join('')+
+    '</div>';
 }
-
 // NUTRITION
 
 // GOALS
 function rGoals(){
-  const el=document.getElementById('s-goals');
+  const el=document.getElementById('s-goals'); if(!el) return;
   el.innerHTML=`
-<div class="sh"><div><div class="st">Goals Engine</div><div class="ss">${S.goals.length} active goals · PROJECT LIBERATO</div></div><button class="btn-goal-glow" onclick="showAddGoal()">+ Goal</button></div>
+<div class="sh"><div><div class="st">Objetivos</div><div class="ss">${S.goals.length} objetivo(s) · PROJECT LIBERATO</div></div><button class="btn-goal-glow" onclick="showAddGoal()">+ Objetivo</button></div>
 <div style="margin-bottom:24px;">
-  ${S.goals.map(g=>`<div class="gi"><div class="gico">${g.icon}</div><div class="ginfo"><div class="gn">${g.name}</div><div class="gm">${g.current}${g.unit} → ${g.target}${g.unit} · ETA: ${g.eta}</div><div class="pb" style="margin-top:8px;"><div class="pf pc" style="width:${g.progress}%;background:linear-gradient(90deg,rgba(0,229,255,.3),var(--${g.color==='green'?'green':g.color==='blue'?'blue':g.color==='purple'?'purple':'cyan'}));"></div></div></div><div style="text-align:right;flex-shrink:0;"><div style="font-size:20px;font-weight:700;color:var(--cyan);font-family:var(--mono);">${g.progress}%</div><div style="font-size:9px;color:var(--t3);font-family:var(--mono);">${g.priority}</div></div></div>`).join('')}
+  ${S.goals.map(g=>`<div class="gi"><div class="gico">${g.icon}</div><div class="ginfo"><div class="gn">${g.name}</div><div class="gm">${g.current}${g.unit} → ${g.target}${g.unit}</div><div class="pb" style="margin-top:8px;"><div class="pf pc" style="width:${g.progress}%;background:linear-gradient(90deg,rgba(0,229,255,.3),var(--${g.color==='green'?'green':g.color==='blue'?'blue':g.color==='purple'?'purple':'cyan'}));"></div></div></div><div style="text-align:right;flex-shrink:0;"><div style="font-size:20px;font-weight:700;color:var(--cyan);font-family:var(--mono);">${g.progress}%</div><div style="font-size:9px;color:var(--t3);font-family:var(--mono);">${({HIGH:'ALTA',MED:'MEDIA',LOW:'BAJA'}[g.priority]||g.priority)}</div></div></div>`).join('')}
 </div>
 <div class="card">
-  <div class="cl">Goal Simulator</div>
-  <div style="font-size:12px;color:var(--t3);margin-bottom:16px;">Adjust variables to simulate timeline projection</div>
-  ${[['Daily Calories','sc',1800,3500,2500,'kcal'],['Protein','sp',100,220,155,'g'],['Training Days/Wk','sv',1,7,5,'days']].map(([lb,id,mn,mx,v,u])=>`<div style="margin-bottom:14px;"><div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="font-size:11px;color:var(--t2);">${lb}</span><span style="font-size:11px;color:var(--cyan);font-family:var(--mono);" id="${id}-v">${v} ${u}</span></div><input type="range" min="${mn}" max="${mx}" value="${v}" style="width:100%;accent-color:var(--cyan);cursor:pointer;" oninput="document.getElementById('${id}-v').textContent=this.value+' ${u}';"></div>`).join('')}
+  <div class="cl">Simulador de Objetivos</div>
+  <div style="font-size:12px;color:var(--t3);margin-bottom:16px;">Ajusta las variables para simular la proyección</div>
+  ${[['Calorías diarias','sc',1800,3500,2500,'kcal'],['Proteína','sp',100,220,155,'g'],['Días de entreno/sem','sv',1,7,5,'días']].map(([lb,id,mn,mx,v,u])=>`<div style="margin-bottom:14px;"><div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="font-size:11px;color:var(--t2);">${lb}</span><span style="font-size:11px;color:var(--cyan);font-family:var(--mono);" id="${id}-v">${v} ${u}</span></div><input type="range" min="${mn}" max="${mx}" value="${v}" style="width:100%;accent-color:var(--cyan);cursor:pointer;" oninput="document.getElementById('${id}-v').textContent=this.value+' ${u}';"></div>`).join('')}
   <div class="air"><div class="ait" id="brief-proj-txt">${(S.checkins&&S.checkins.length)?'Proyecci\u00f3n disponible con m\u00e1s check-ins. Pregunta al Coach AI por tu tendencia real.':'Registra tu peso y medidas reales para ver proyecciones. Aqu\u00ed no se inventan fechas ni cifras (Regla #1).'}</div></div>
 </div>`;
 }
 function showAddGoal(){
-  document.getElementById('mc').innerHTML=`<div class="mh"><div class="mt">New Goal</div><div class="mx" onclick="closeM()">✕</div></div><div class="mb"><div class="fg"><label class="fl">Goal Name</label><input type="text" class="fi" id="ng-n" placeholder="e.g. Reach 10% Body Fat"></div><div class="fg"><label class="fl">Current Value</label><input type="number" class="fi" id="ng-c" placeholder="12"></div><div class="fg"><label class="fl">Target Value</label><input type="number" class="fi" id="ng-t" placeholder="10"></div><div class="fg"><label class="fl">Unit</label><input type="text" class="fi" id="ng-u" placeholder="% or kg or cm"></div></div><div class="mf"><button class="btn bg" onclick="closeM()">Cancel</button><button class="btn bp" onclick="addGoal()">Add Goal</button></div>`;
+  document.getElementById('mc').innerHTML=`<div class="mh"><div class="mt">Nuevo Objetivo</div><div class="mx" onclick="closeM()">✕</div></div><div class="mb"><div class="fg"><label class="fl">Nombre del objetivo</label><input type="text" class="fi" id="ng-n" placeholder="ej: Llegar a 10% de grasa"></div><div class="fg"><label class="fl">Valor actual</label><input type="number" class="fi" id="ng-c" placeholder="12"></div><div class="fg"><label class="fl">Valor meta</label><input type="number" class="fi" id="ng-t" placeholder="10"></div><div class="fg"><label class="fl">Unidad</label><input type="text" class="fi" id="ng-u" placeholder="% o kg o cm"></div></div><div class="mf"><button class="btn bg" onclick="closeM()">Cancelar</button><button class="btn bp" onclick="addGoal()">Agregar</button></div>`;
   document.getElementById('mov').classList.add('open');
 }
-function addGoal(){const n=document.getElementById('ng-n')?.value;const c=parseFloat(document.getElementById('ng-c')?.value)||0;const t=parseFloat(document.getElementById('ng-t')?.value)||0;const u=document.getElementById('ng-u')?.value||'';;if(!n)return;S.goals.push({id:Date.now(),name:n,icon:'◆',current:c,target:t,unit:u,priority:'MED',eta:'TBD',progress:0,color:'cyan'});Store.save();closeM();rGoals();addLog(`GOAL ADDED: ${n}`,'ok');notif('Goal Added',n,'◆');}
+function addGoal(){const n=document.getElementById('ng-n')?.value;const c=parseFloat(document.getElementById('ng-c')?.value)||0;const t=parseFloat(document.getElementById('ng-t')?.value)||0;const u=document.getElementById('ng-u')?.value||'';;if(!n)return;S.goals.push({id:Date.now(),name:n,icon:'◆',current:c,target:t,unit:u,priority:'MED',eta:'TBD',progress:0,color:'cyan'});Store.save();closeM();rGoals();addLog(`GOAL ADDED: ${n}`,'ok');notif('Objetivo agregado',n,'◆');}
 
 // TIMELINE
 function rTimeline(){
@@ -1427,7 +1426,7 @@ function renderBrief(){
     ["🔥",n.calories.current+" / "+n.calories.target+" kcal",false],
     ["💧",n.water.current+" / "+n.water.target+" L",n.water.current>=2.2],
     ["😴",rc.sleep+"h sleep",rc.sleep>=7],
-    ["💊","Creatine 5g",true]
+    ["💊","Creatina 5g",true]
   ];
   var h="";
   for(var i=0;i<chips.length;i++){
@@ -1475,15 +1474,15 @@ function renderBodyCol(){
   }
   var dW=_dlt(m.weight,"weight"), dBF=_dlt(m.bodyFat,"bodyFat"), dWa=_dlt(m.waist,"waist");
   var rows=[
-    ["WEIGHT",m.weight,"kg",dW[0],dW[1]],
-    ["BODY FAT",m.bodyFat,"%",dBF[0],dBF[1]],
-    ["LEAN MASS",m.leanMass,"kg","",""],
-    ["MUSCLE",m.muscleMass,"kg","",""],
-    ["WATER",m.water,"%","",""],
-    ["BMI",m.bmi,"","",""],
-    ["BMR",m.bmr,"kcal","",""],
-    ["SHOULDERS",m.shoulders,"cm","",""],
-    ["WAIST",m.waist,"cm",dWa[0],dWa[1]]
+    ["PESO",m.weight,"kg",dW[0],dW[1]],
+    ["GRASA",m.bodyFat,"%",dBF[0],dBF[1]],
+    ["MASA MAGRA",m.leanMass,"kg","",""],
+    ["MÚSCULO",m.muscleMass,"kg","",""],
+    ["AGUA",m.water,"%","",""],
+    ["IMC",m.bmi,"","",""],
+    ["METAB. BASAL",m.bmr,"kcal","",""],
+    ["HOMBROS",m.shoulders,"cm","",""],
+    ["CINTURA",m.waist,"cm",dWa[0],dWa[1]]
   ];
   var rh="";
   for(var i=0;i<rows.length;i++){
@@ -1498,7 +1497,7 @@ function renderBodyCol(){
         '</div>';
   }
   var ms=(S.photos&&S.photos.main)?S.photos.main:"";
-  var keys=["p1","p2","p3","p4"], lbls=["Front","Side L","Back","Side R"], pg="";
+  var keys=["p1","p2","p3","p4"], lbls=["Frente","Lado izq","Espalda","Lado der"], pg="";
   for(var pi=0;pi<4;pi++){
     var k=keys[pi], sv=(S.photos&&S.photos[k])?S.photos[k]:"";
     pg+='<div class="pt v4ph" data-key="'+k+'">'+
@@ -1514,21 +1513,21 @@ function renderBodyCol(){
         '<div class="bscan" id="bscan-el" style="border-radius:var(--r)!important;">'+
           '<div class="bscan-ph" id="bscan-ph" style="'+(ms?"display:none;":"")+'">'+
             '<div style="font-size:28px;opacity:.18;">&#x2B21;</div>'+
-            '<div style="font-size:9px;color:var(--t3);font-family:var(--mono);letter-spacing:3px;">UPLOAD PHOTO</div>'+
+            '<div style="font-size:9px;color:var(--t3);font-family:var(--mono);letter-spacing:3px;">SUBIR FOTO</div>'+
           '</div>'+
           '<img id="bscan-img" src="'+ms+'" style="display:'+(ms?"block":"none")+';width:100%;height:100%;object-fit:cover;opacity:.85;" alt="">'+
           '<div class="sc-ov"><div class="sc-grid"></div><div class="sc-line"></div>'+
             '<div class="sc-corner sc-tl"></div><div class="sc-corner sc-tr2"></div>'+
             '<div class="sc-corner sc-bl"></div><div class="sc-corner sc-br"></div>'+
-            '<div class="sc-tag" style="top:10px;left:50%;transform:translateX(-50%);">SCANNING &middot; PROJECT LIBERATO</div>'+
-            '<div class="sc-tag" style="bottom:10px;left:8px;">'+m.bodyFat+'% BF</div>'+
-            '<div class="sc-tag" style="bottom:10px;right:8px;">'+m.leanMass+'kg LEAN</div>'+
+            '<div class="sc-tag" style="top:10px;left:50%;transform:translateX(-50%);">ESCANEO &middot; PROJECT LIBERATO</div>'+
+            '<div class="sc-tag" style="bottom:10px;left:8px;">'+m.bodyFat+'% GRASA</div>'+
+            '<div class="sc-tag" style="bottom:10px;right:8px;">'+m.leanMass+'kg MAGRA</div>'+
           '</div>'+
         '</div>'+
         '<div class="pg" style="margin-top:8px;flex-shrink:0;">'+pg+'</div>'+
       '</div>'+
       '<div class="bmet-card-col">'+
-        '<div class="cl" style="margin-bottom:10px;flex-shrink:0;">Key Metrics</div>'+
+        '<div class="cl" style="margin-bottom:10px;flex-shrink:0;">Métricas clave</div>'+
         '<div style="flex:1;">'+rh+'</div>'+
         '<div class="air" style="margin-top:12px;padding:10px 12px;flex-shrink:0;">'+
           '<div class="ait" style="margin-bottom:8px;">'+((S.photos&&S.photos.main)?'Toca &#x201C;Escanear con IA&#x201D; para analizar tu foto. El an&#xE1;lisis se calcula de tu imagen; no se inventan cifras.':'Sube tu foto y registra tus medidas reales para activar el an&#xE1;lisis del Coach.')+'</div>'+
@@ -1601,7 +1600,7 @@ function saveCI(){
   notif('Check-In Saved','v'+ci.version+' · '+w+'kg','✓');
   renderBodyCol(); renderBrief(); rGoals(); rTimeline();
   var sub=document.getElementById('ci-sub');
-  if(sub) sub.textContent='Log today&#39;s progress · Check-in #'+(S.checkins.length+1);
+  if(sub) sub.textContent='Registra tu progreso de hoy · Check-in #'+(S.checkins.length+1);
 }
 
 function goTo(id){ var el=document.getElementById(id); if(el) el.scrollIntoView({behavior:"smooth"}); }
@@ -1912,7 +1911,7 @@ function openProgress(){
 
   function aib(id){ return '<button class="btn-ai" id="aib-'+id+'" onclick="aiGenerate(\''+id+'\')"><span>&#x26A1;</span> Generar con IA</button>'; }
 
-  var defSupps=["Creatine 5g","Omega-3 1-2g EPA/DHA","Magnesio Glicinato 200-400mg","Multivitamin","Whey Isolate post-WO"];
+  var defSupps=["Creatina 5g","Omega-3 1-2g EPA/DHA","Magnesio Glicinato 200-400mg","Multivitamínico","Whey Isolate post-entreno"];
   var allSupps=defSupps.concat(S.customSupps);
   var suppHtml=allSupps.map(function(s,i){
     return '<div class="chip-item"><input type="checkbox" checked style="accent-color:var(--cyan);width:14px;height:14px;"><span style="font-size:11px;color:var(--t2);">'+s+'</span>'+(i>=defSupps.length?'<button class="chip-item-rm" onclick="removeCustomSupp('+(i-defSupps.length)+')">&#x2715;</button>':'')+'</div>';
@@ -1942,7 +1941,7 @@ function openProgress(){
     :
       '<div style="display:flex;align-items:center;gap:12px;">'+
         '<span style="font-size:28px;">&#x1F5BC;&#xFE0F;</span>'+
-        '<div><div style="font-size:12px;color:var(--t2);">Sin foto en el Body Scanner</div>'+
+        '<div><div style="font-size:12px;color:var(--t2);">Sin foto en el Escáner</div>'+
         '<div style="font-size:10px;color:var(--t3);margin-top:3px;">Sube tu foto principal en el Scanner para que la IA pueda analizar tu composicion corporal real.</div></div>'+
       '</div>'
     )+'</div>';
@@ -1986,8 +1985,8 @@ function openProgress(){
     '</div>'+
     '<div class="np-tabs">'+
       '<div class="np-tab active" data-tab="nt1" onclick="npTabEl(this)">&#x1F4AA; Cuerpo</div>'+
-      '<div class="np-tab" data-tab="nt2" onclick="npTabEl(this)">&#x1F504; Recovery</div>'+
-      '<div class="np-tab" data-tab="nt3" onclick="npTabEl(this)">&#x1F969; Nutricion</div>'+
+      '<div class="np-tab" data-tab="nt2" onclick="npTabEl(this)">&#x1F504; Recuperación</div>'+
+      '<div class="np-tab" data-tab="nt3" onclick="npTabEl(this)">&#x1F969; Nutrición</div>'+
       '<div class="np-tab" data-tab="nt4" onclick="npTabEl(this)">&#x1F48A; Suplementos &amp; Reglas</div>'+
     '</div>'+
     '<div class="mb" style="max-height:60vh;overflow-y:auto;padding:20px 24px;">'+
@@ -2337,7 +2336,7 @@ function initPage(){
   rTimeline();
   clock();
   var sub=document.getElementById('ci-sub');
-  if(sub) sub.textContent='Log today&#39;s progress · Check-in #'+(S.checkins.length+1);
+  if(sub) sub.textContent='Registra tu progreso de hoy · Check-in #'+(S.checkins.length+1);
 
   // Training day click delegation
   var trainEl=document.getElementById("s-training");
@@ -2993,7 +2992,7 @@ if(typeof _defMeals==='undefined'){
     breakfast:[
       {name:"Eggs x3 + Avocado",p:21,c:8,f:15,kcal:251},
       {name:"Baked potato (med)",p:3,c:30,f:0,kcal:130},
-      {name:"Whey Isolate post-WO",p:25,c:3,f:1,kcal:120}
+      {name:"Whey Isolate post-entreno",p:25,c:3,f:1,kcal:120}
     ],
     lunch:[{name:"Chicken thigh 200g",p:42,c:0,f:14,kcal:294}],
     dinner:[{name:"Salmon 150g",p:30,c:0,f:14,kcal:246}],
@@ -6551,7 +6550,7 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
   setTimeout(_reqPersist, 1500);
 
   /* versión */
-  try{ APP_VERSION="v42"; APP_BUILD="2026-08-19";
+  try{ APP_VERSION="v43"; APP_BUILD="2026-08-19";
     var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
   }catch(e){}
 })();
