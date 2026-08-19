@@ -5365,7 +5365,7 @@ async function genRoutineAI(protocol){
 })();
 
 /* ── Versión ── */
-try{ APP_VERSION="v37"; APP_BUILD="2026-08-19";
+try{ APP_VERSION="v38"; APP_BUILD="2026-08-19";
   var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
   console.log("%c◈ Project Liberato Fitness "+APP_VERSION+" · "+APP_BUILD,"color:#ff2d95;font-weight:bold;font-size:13px;");
 }catch(e){}
@@ -5437,6 +5437,125 @@ try{ APP_VERSION="v37"; APP_BUILD="2026-08-19";
   try{
     var _oProbe=window.setupOnInput;
   }catch(e){}
+})();
+
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V38 — AUTO-ACTUALIZACIÓN + BOTÓN DE REFRESCO (19-ago-2026)
+   Para que Dave no tenga que abrir/copiar/refrescar a mano tras cada
+   cambio que despliego. (1) botón ⟳ discreto abajo-izquierda que recarga
+   con cache-bust. (2) consulta version.json cada pocos minutos; si la
+   versión desplegada ≠ la que corre, muestra un banner "Actualización
+   disponible" que recarga con un toque. localStorage se conserva (es
+   por-origen; el ?t= no lo afecta).
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v38) return; window.__v38=true;
+
+  var css=document.createElement('style');
+  css.textContent=
+   '#v38-refresh{position:fixed;left:12px;bottom:90px;z-index:520;width:36px;height:36px;'
+  +'border-radius:50%;border:1px solid rgba(255,255,255,.14);background:rgba(19,11,36,.82);'
+  +'-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);color:var(--t2,#b9b3c9);'
+  +'font-size:17px;line-height:1;display:flex;align-items:center;justify-content:center;'
+  +'cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.45);transition:transform .15s;}'
+  +'#v38-refresh:active{transform:scale(.88) rotate(180deg);}'
+  +'#v38-banner{position:fixed;left:50%;transform:translateX(-50%);bottom:96px;z-index:640;'
+  +'background:linear-gradient(120deg,#8b5cff,#ff2d95,#ff7a1a);color:#fff;border:none;'
+  +'border-radius:999px;padding:11px 20px;font-size:12px;font-weight:700;letter-spacing:.2px;'
+  +'box-shadow:0 10px 28px rgba(255,45,149,.45);cursor:pointer;display:none;'
+  +'align-items:center;gap:8px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;'
+  +'animation:v38pop .3s ease;}'
+  +'@keyframes v38pop{from{opacity:0;transform:translateX(-50%) translateY(8px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}';
+  document.head.appendChild(css);
+
+  function reloadFresh(){
+    try{ var u=location.origin+location.pathname+'?t='+Date.now(); location.replace(u); }
+    catch(e){ location.reload(); }
+  }
+
+  function mount(){
+    if(!document.body) return false;
+    if(!document.getElementById('v38-refresh')){
+      var b=document.createElement('button');
+      b.id='v38-refresh'; b.title='Refrescar'; b.setAttribute('aria-label','Refrescar');
+      b.innerHTML='&#x21BB;'; b.onclick=reloadFresh;
+      document.body.appendChild(b);
+    }
+    if(!document.getElementById('v38-banner')){
+      var ban=document.createElement('button');
+      ban.id='v38-banner';
+      ban.innerHTML='<span>&#x21BB;</span> Actualizaci&#xF3;n disponible';
+      ban.onclick=reloadFresh;
+      document.body.appendChild(ban);
+    }
+    return true;
+  }
+
+  function checkUpdate(){
+    try{
+      fetch('version.json?cb='+Date.now(),{cache:'no-store'})
+        .then(function(r){ return r&&r.ok ? r.json() : null; })
+        .then(function(j){
+          if(j && j.v && typeof APP_VERSION!=='undefined' && j.v!==APP_VERSION){
+            var ban=document.getElementById('v38-banner');
+            if(ban){ ban.style.display='inline-flex';
+              ban.innerHTML='<span>&#x21BB;</span> Actualizar a '+j.v; }
+          }
+        }).catch(function(){});
+    }catch(e){}
+  }
+
+  var t=0, iv=setInterval(function(){ t++;
+    if(mount()){ clearInterval(iv); checkUpdate(); }
+    if(t>40) clearInterval(iv);
+  },300);
+  window.addEventListener('load',function(){ mount(); checkUpdate(); });
+  setInterval(checkUpdate, 5*60*1000);
+})();
+
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V38b — LIMPIAR SEED PERSISTIDO (Regla #1)
+   En dispositivos que ya usaron versiones viejas, el seed (73.9kg/12%…)
+   quedó guardado en localStorage, así que el reset "perfil nuevo" no lo
+   tocaba. Aquí, tras cargar, si las métricas son EXACTAMENTE el seed de
+   fábrica y no hay historial (ni check-ins, ni dieta, ni rutina), se
+   ponen en 0. Si en algún momento Dave metió datos reales, el fingerprint
+   no coincide y NO se toca nada.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v38b) return; window.__v38b=true;
+  function isFactorySeed(m){
+    return m && m.weight===73.9 && m.bodyFat===12 && m.bmr===1780 &&
+           m.waist===75 && m.shoulders===105 && m.leanMass===65 &&
+           m.muscleMass===40 && m.water===61;
+  }
+  function zeroAll(){
+    var m=S.metrics; for(var k in m){ if(typeof m[k]==='number') m[k]=0; }
+    ['calories','protein','carbs','fat','water','creatine','omega3'].forEach(function(kk){
+      if(S.nutrition[kk]) S.nutrition[kk].current=0;
+    });
+    for(var r in S.recovery){ if(typeof S.recovery[r]==='number') S.recovery[r]=0; }
+    (S.goals||[]).forEach(function(g){ g.current=0; g.progress=0; });
+  }
+  function maybeClean(){
+    try{
+      var noHist=(!S.checkins||!S.checkins.length) && !S.meals &&
+                 (!S.customDays||!S.customDays.length);
+      if(isFactorySeed(S.metrics) && noHist) zeroAll();
+    }catch(e){}
+  }
+  /* envolver Store.load para limpiar tras mezclar los datos guardados */
+  if(typeof Store!=='undefined' && typeof Store.load==='function'){
+    var _load=Store.load.bind(Store);
+    Store.load=function(){ var r=_load.apply(this,arguments); maybeClean(); return r; };
+  }
+  /* red de seguridad: también al cargar la página, por si ya se llamó load */
+  window.addEventListener('load', maybeClean);
+  maybeClean();
 })();
 
 </script>
