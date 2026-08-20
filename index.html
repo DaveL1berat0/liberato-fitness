@@ -5290,7 +5290,7 @@ async function genRoutineAI(protocol){
     }
     var H=[];
     /* Macros */
-    H.push("<div class='card' style='margin-bottom:14px;'><div class='cl'>Macros de Hoy</div>"
+    H.push("<div class='card' style='margin-bottom:14px;'><div class='cl'>Plan del día (objetivo)</div>"
       +"<div style='display:flex;justify-content:space-around;flex-wrap:wrap;gap:12px;padding:8px 0 4px;'>"
       +ring('CALORÍAS',n.calories.current,n.calories.target,'#ff7a1a','')
       +ring('PROTEÍNA',n.protein.current,n.protein.target,'#ff2d95','g')
@@ -7093,6 +7093,111 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
 
   /* versión */
   try{ APP_VERSION="v46"; APP_BUILD="2026-08-19";
+    var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+  }catch(e){}
+})();
+
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V47 — DIARIO DE COMIDAS DEL DÍA (adherencia real, estilo MyFitnessPal)
+   Registrar lo que realmente comes hoy (por texto→IA o foto→IA) y ver el
+   consumido vs tu objetivo en tiempo real. Es la brecha #1 frente a las
+   top apps: teníamos el PLAN pero no el seguimiento del consumo real.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v47) return; window.__v47=true;
+
+  try{ var x=JSON.parse(localStorage.getItem('pf1x')||'null'); if(x&&x.foodLog) S.foodLog=x.foodLog; }catch(e){}
+  (function(){ var _s=Store.save; Store.save=function(){ var r=_s.apply(this,arguments);
+    try{ var c=JSON.parse(localStorage.getItem('pf1x')||'{}'); c.foodLog=S.foodLog||null; localStorage.setItem('pf1x',JSON.stringify(c)); }catch(e){} return r; }; })();
+
+  function _today(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+  function _log(){ if(!S.foodLog) S.foodLog={}; var k=_today(); if(!S.foodLog[k]) S.foodLog[k]=[]; return S.foodLog[k]; }
+  function _totals(){ var t={p:0,c:0,f:0,k:0}; _log().forEach(function(i){ t.p+=Number(i.p)||0; t.c+=Number(i.c)||0; t.f+=Number(i.f)||0; t.k+=Number(i.kcal)||0; }); return {p:Math.round(t.p),c:Math.round(t.c),f:Math.round(t.f),k:Math.round(t.k)}; }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+  window._logFood=function(item){ _log().unshift(item); Store.save(); var ne=document.getElementById('s-nutrition'); if(ne){ne._r=0;renderNutrition();} };
+  window._rmDiary=function(idx){ var l=_log(); if(idx>=0&&idx<l.length){ l.splice(idx,1); Store.save(); var ne=document.getElementById('s-nutrition'); if(ne){ne._r=0;renderNutrition();} } };
+
+  window._addDiaryText=async function(){
+    var inp=document.getElementById('v47-add'); var name=inp&&inp.value.trim(); if(!name) return;
+    if(!_AKEY){ notif('Configura tu API key','Toca ⚙ en el Coach AI','&#x1F511;'); try{openApiKeySettings();}catch(e){} return; }
+    var btn=document.getElementById('v47-addbtn'); if(btn){btn.disabled=true;btn.textContent='...';}
+    inp.value='';
+    try{
+      var text=await _aiCall("Dame los macros de: "+name+". Responde SOLO JSON sin markdown: {\"name\":\"nombre corto\",\"p\":gramos,\"c\":gramos,\"f\":gramos,\"kcal\":calorias}", 200);
+      if(!text) return;
+      var jm=text.match(/\{[\s\S]*?\}/); if(!jm) throw new Error('Respuesta inesperada');
+      var v=JSON.parse(jm[0]);
+      _logFood({name:v.name||name, p:Number(v.p)||0, c:Number(v.c)||0, f:Number(v.f)||0, kcal:Number(v.kcal)||0, at:new Date().toISOString()});
+      notif('Registrado', (v.name||name)+' · '+(Number(v.kcal)||0)+' kcal','✓');
+    }catch(e){ console.error('[addDiaryText]',e); notif('Error IA',(e&&e.message)||'No se pudo','⚠'); }
+    if(btn){btn.disabled=false;btn.textContent='+ IA';}
+  };
+
+  window._addDiaryPhoto=function(){
+    var fi=document.createElement('input'); fi.type='file'; fi.accept='image/*';
+    fi.onchange=async function(e){
+      var f=e.target.files&&e.target.files[0]; if(!f) return;
+      if(!_AKEY){ notif('Configura tu API key','Toca ⚙ en el Coach AI','&#x1F511;'); try{openApiKeySettings();}catch(e2){} return; }
+      var ld=document.createElement('div'); ld.id='v47-load'; ld.style.cssText='position:fixed;inset:0;background:rgba(6,4,14,.92);z-index:820;display:flex;flex-direction:column;align-items:center;justify-content:center;';
+      ld.innerHTML="<div style='font-size:30px;margin-bottom:12px;'>📷</div><div style='font-size:12px;color:var(--accent,#ff2d95);font-family:var(--mono);letter-spacing:2px;'>ANALIZANDO COMIDA...</div>";
+      document.body.appendChild(ld);
+      try{
+        var dataUrl=await new Promise(function(rs,rj){ var r=new FileReader(); r.onload=function(ev){rs(ev.target.result);}; r.onerror=rj; r.readAsDataURL(f); });
+        if(typeof compressImage==='function'){ try{ dataUrl=await compressImage(dataUrl,0.8,1000); }catch(e3){} }
+        var b64=dataUrl.split(',')[1], mime=(dataUrl.split(';')[0].split(':')[1])||'image/jpeg';
+        var text=await _aiCallVisionMulti("Identifica esta comida y estima sus macros totales del plato. Responde SOLO JSON: {\"name\":\"que es\",\"p\":gramos,\"c\":gramos,\"f\":gramos,\"kcal\":calorias}", 900, [{b64:b64,mime:mime}]);
+        if(!text) return;
+        var jm=text.match(/\{[\s\S]*?\}/); if(!jm) throw new Error('No pude identificar');
+        var v=JSON.parse(jm[0]);
+        _logFood({name:v.name||'Comida', p:Number(v.p)||0, c:Number(v.c)||0, f:Number(v.f)||0, kcal:Number(v.kcal)||0, at:new Date().toISOString(), foto:true});
+        notif('Registrado por foto',(v.name||'Comida')+' · '+(Number(v.kcal)||0)+' kcal','📷');
+      }catch(err){ console.error('[addDiaryPhoto]',err); notif('Error IA',(err&&err.message)||'No se pudo','⚠'); }
+      finally{ var l=document.getElementById('v47-load'); if(l) l.remove(); }
+    };
+    fi.click();
+  };
+
+  function diaryCard(){
+    var n=S.nutrition, t=_totals(), items=_log();
+    function bar(lb,val,tgt,col){ var pct=tgt>0?Math.min(val/tgt*100,100):0; var over=val>tgt;
+      return '<div style="margin-bottom:9px;"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;"><span style="color:var(--t2);">'+lb+'</span><span style="color:'+(over?'#ffa64d':'var(--t3)')+';font-family:var(--mono);">'+val+' / '+tgt+'</span></div><div style="height:7px;border-radius:4px;background:rgba(255,255,255,.06);overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:'+col+';border-radius:4px;"></div></div></div>'; }
+    var rows=items.map(function(it,i){
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid rgba(255,255,255,.05);">'
+        +'<span style="font-size:12.5px;color:var(--t2);">'+(it.foto?'📷 ':'')+esc(it.name)+'</span>'
+        +'<span style="display:flex;align-items:center;gap:8px;"><span style="font-size:10px;color:var(--t3);font-family:var(--mono);white-space:nowrap;">'+(it.kcal||0)+' kcal · '+(it.p||0)+'P</span>'
+        +'<button onclick="_rmDiary('+i+')" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:14px;padding:0 2px;">✕</button></span></div>';
+    }).join('');
+    var kcalLeft=(n.calories.target||0)-t.k;
+    return '<div class="card" style="margin-bottom:14px;">'
+      +'<div style="display:flex;justify-content:space-between;align-items:baseline;"><div class="cl" style="margin:0;">Diario de hoy</div>'
+      +'<span style="font-size:11px;color:'+(kcalLeft<0?'#ffa64d':'var(--cyan)')+';font-family:var(--mono);">'+(kcalLeft>=0?(kcalLeft+' kcal restantes'):(Math.abs(kcalLeft)+' kcal de más'))+'</span></div>'
+      +'<div style="margin:12px 0;">'
+      +bar('Calorías',t.k,n.calories.target,'#ff7a1a')+bar('Proteína',t.p,n.protein.target,'#ff2d95')+bar('Carbs',t.c,n.carbs.target,'#8b5cff')+bar('Grasa',t.f,n.fat.target,'#22d3ee')
+      +'</div>'
+      +(rows?('<div style="margin-bottom:10px;">'+rows+'</div>'):'<div style="font-size:11.5px;color:var(--t3);text-align:center;padding:8px 0;">Aún no registras nada hoy. Anota lo que comes para ver tu adherencia real.</div>')
+      +'<div style="display:flex;gap:6px;">'
+      +'<input id="v47-add" placeholder="ej: 2 huevos, café, plátano..." onkeydown="if(event.key===\'Enter\')_addDiaryText()" style="flex:1;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:10px;color:var(--t1);font-size:12.5px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;">'
+      +'<button id="v47-addbtn" onclick="_addDiaryText()" style="background:rgba(139,92,255,.15);border:1px solid rgba(139,92,255,.4);color:#c9b8ff;border-radius:10px;padding:0 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">+ IA</button>'
+      +'<button onclick="_addDiaryPhoto()" title="Registrar por foto" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:var(--t2);border-radius:10px;padding:0 12px;font-size:15px;cursor:pointer;">📷</button>'
+      +'</div></div>';
+  }
+
+  var _rn=renderNutrition;
+  renderNutrition=function(){
+    _rn.apply(this,arguments);
+    var el=document.getElementById('s-nutrition'); if(!el) return;
+    if(!(S.user&&S.user.goalConfirmed)) return; /* gate activo */
+    if(document.getElementById('v47-add')) return;
+    try{
+      var wrap=document.createElement('div'); wrap.innerHTML=diaryCard();
+      el.insertBefore(wrap.firstChild, el.firstChild);
+    }catch(e){ console.warn('[v47]',e); }
+  };
+
+  try{ APP_VERSION="v47"; APP_BUILD="2026-08-19";
     var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
   }catch(e){}
 })();
