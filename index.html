@@ -7202,6 +7202,156 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
   }catch(e){}
 })();
 
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V48 — DIARIO DE ENTRENAMIENTO (log de series estilo Hevy/Strong)
+   + CAPA PERSONAL (te habla a ti y a tu objetivo)
+   Dave: marcar cada serie "¿pude o no?" (✓), ver la última vez y progresar.
+   Punto de retorno: v47 (commit a5d3819).
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v48) return; window.__v48=true;
+
+  try{ var x=JSON.parse(localStorage.getItem('pf1x')||'null'); if(x&&x.workoutLog) S.workoutLog=x.workoutLog; }catch(e){}
+  (function(){ var _s=Store.save; Store.save=function(){ var r=_s.apply(this,arguments);
+    try{ var c=JSON.parse(localStorage.getItem('pf1x')||'{}'); c.workoutLog=S.workoutLog||null; localStorage.setItem('pf1x',JSON.stringify(c)); }catch(e){} return r; }; })();
+
+  function _today(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function _wk(){ if(!S.workoutLog) S.workoutLog={}; return S.workoutLog; }
+  /* última sesión (fecha < hoy) que tenga ese ejercicio */
+  function _lastFor(name){
+    var wl=_wk(), dates=Object.keys(wl).sort().reverse(), hoy=_today();
+    for(var i=0;i<dates.length;i++){ if(dates[i]===hoy) continue;
+      var s=wl[dates[i]] && wl[dates[i]].ex && wl[dates[i]].ex[name];
+      if(s && s.length){ var best=s.filter(function(x){return x.done;}).sort(function(a,b){return (b.w||0)-(a.w||0);})[0]||s[0]; return {w:best.w,r:best.r,date:dates[i]}; }
+    }
+    return null;
+  }
+
+  var _selDay=0;
+  window.openWorkoutLog=function(dayIdx){
+    var days=(typeof getActiveDays==='function')?getActiveDays():[];
+    if(!days.length){ notif('Sin rutina','Genera tu rutina primero','⚠'); return; }
+    /* por defecto, el día cuyo nm coincide con hoy, si no el primero */
+    if(dayIdx==null){
+      var wd=['SUN','MON','TUE','WED','THU','FRI','SAT'][new Date().getDay()];
+      var idx=days.findIndex(function(d){ return (d.nm||'').toUpperCase().indexOf(wd)===0; });
+      dayIdx=idx>=0?idx:0;
+    }
+    _selDay=dayIdx;
+    _drawWkLog();
+  };
+  function _drawWkLog(){
+    var mc=document.getElementById('mc'), mov=document.getElementById('mov'); if(!mc||!mov) return;
+    var days=getActiveDays(), d=days[_selDay]; if(!d) return;
+    var hoy=_today();
+    var todaySaved=(_wk()[hoy]&&_wk()[hoy].ex)||{};
+    var tabs=days.map(function(dd,i){ var a=i===_selDay;
+      return '<button onclick="_wkTab('+i+')" style="padding:6px 11px;border-radius:8px;border:1px solid rgba(255,255,255,'+(a?'.25':'.08')+');background:'+(a?(dd.col||'#8b5cff')+'22':'transparent')+';color:'+(a?(dd.col||'#c9b8ff'):'var(--t3)')+';font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;">'+esc(dd.nm)+'</button>';
+    }).join('');
+    var ex=(d.ex||[]).map(function(x,xi){
+      var planned=(Number(x.sets)||3);
+      var last=_lastFor(x.nm);
+      var saved=todaySaved[x.nm];
+      var rows='';
+      for(var s=0;s<planned;s++){
+        var sv=saved&&saved[s]||{};
+        var pw=(sv.w!=null?sv.w:(last?last.w:''));
+        var pr=(sv.r!=null?sv.r:(last?last.r:''));
+        rows+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;" data-ex="'+esc(x.nm)+'" data-set="'+s+'">'
+          +'<span style="font-size:10px;color:var(--t3);font-family:var(--mono);width:16px;">'+(s+1)+'</span>'
+          +'<input class="wk-w" type="number" inputmode="decimal" placeholder="kg" value="'+(pw!==''?pw:'')+'" style="width:64px;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:8px;color:var(--t1);font-size:13px;text-align:center;">'
+          +'<span style="color:var(--t3);font-size:12px;">×</span>'
+          +'<input class="wk-r" type="number" inputmode="numeric" placeholder="reps" value="'+(pr!==''?pr:'')+'" style="width:58px;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:8px;color:var(--t1);font-size:13px;text-align:center;">'
+          +'<button class="wk-done" onclick="_wkToggle(this)" data-done="'+(sv.done?'1':'0')+'" style="margin-left:auto;width:34px;height:34px;border-radius:50%;border:1px solid '+(sv.done?'#33e08a':'rgba(255,255,255,.15)')+';background:'+(sv.done?'#33e08a':'transparent')+';color:'+(sv.done?'#04140a':'var(--t3)')+';font-size:15px;cursor:pointer;font-weight:800;">✓</button>'
+          +'</div>';
+      }
+      return '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px 13px;margin-bottom:10px;">'
+        +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">'
+        +'<span style="font-size:13px;font-weight:700;color:var(--t1);">'+esc(x.nm)+'</span>'
+        +'<span style="font-size:10px;color:var(--t3);font-family:var(--mono);">'+planned+'×'+esc(x.reps||'')+'</span></div>'
+        +(last?'<div style="font-size:10px;color:#c9b8ff;margin-bottom:8px;">Última vez: '+last.w+'kg × '+last.r+'</div>':'<div style="font-size:10px;color:var(--t3);margin-bottom:8px;">Primera vez con este ejercicio</div>')
+        +rows+'</div>';
+    }).join('');
+    mc.style.maxWidth='560px';
+    mc.innerHTML='<div class="mh"><div><div class="mt" style="font-size:16px;">🏋 Registrar entreno</div>'
+      +'<div style="font-size:9px;color:var(--t3);font-family:var(--mono);margin-top:3px;">Marca cada serie: ¿la lograste? · '+hoy+'</div></div>'
+      +'<div class="mx" onclick="closeModal()">✕</div></div>'
+      +'<div style="display:flex;gap:6px;padding:10px 16px;flex-wrap:wrap;border-bottom:1px solid rgba(255,255,255,.06);">'+tabs+'</div>'
+      +'<div class="mb" style="padding:14px 16px;">'+(ex||'<div style="color:var(--t3);font-size:12px;">Este día no tiene ejercicios.</div>')+'</div>'
+      +'<div class="mf" style="justify-content:flex-end;gap:8px;"><button class="btn bg" onclick="closeModal()">Cerrar</button>'
+      +'<button class="btn-glow" onclick="_wkSave()" style="border-radius:6px;font-size:10px;padding:9px 22px;">✓ Guardar entreno</button></div>';
+    mov.classList.add('open');
+  }
+  window._wkTab=function(i){ _selDay=i; _drawWkLog(); };
+  window._wkToggle=function(b){ var on=b.getAttribute('data-done')==='1'; on=!on; b.setAttribute('data-done',on?'1':'0');
+    b.style.background=on?'#33e08a':'transparent'; b.style.color=on?'#04140a':'var(--t3)'; b.style.borderColor=on?'#33e08a':'rgba(255,255,255,.15)'; };
+  window._wkSave=function(){
+    var days=getActiveDays(), d=days[_selDay]; if(!d) return;
+    var hoy=_today();
+    var ex={};
+    document.querySelectorAll('#mc [data-ex]').forEach(function(row){
+      var name=row.getAttribute('data-ex'), si=+row.getAttribute('data-set');
+      var w=row.querySelector('.wk-w').value, r=row.querySelector('.wk-r').value, done=row.querySelector('.wk-done').getAttribute('data-done')==='1';
+      if(w===''&&r===''&&!done) return;
+      if(!ex[name]) ex[name]=[];
+      ex[name][si]={w:Number(w)||0, r:Number(r)||0, done:done};
+    });
+    _wk()[hoy]={day:d.ty||d.nm, ex:ex, at:new Date().toISOString()};
+    Store.save();
+    var te=document.getElementById('s-training'); if(te){te._r=0;rTrain();}
+    closeModal();
+    var nDone=0; Object.keys(ex).forEach(function(k){ (ex[k]||[]).forEach(function(s){ if(s.done) nDone++; }); });
+    notif('Entreno registrado', nDone+' series completadas 💪','✓');
+  };
+
+  /* botón "Registrar entreno" arriba del Entreno + badge "hecho hoy" */
+  var _rt=rTrain;
+  rTrain=function(){
+    _rt.apply(this,arguments);
+    var el=document.getElementById('s-training'); if(!el) return;
+    if(!(S.user&&S.user.goalConfirmed)) return;
+    if(!(S.customDays&&S.customDays.length)) return;
+    if(document.getElementById('v48-logbtn')) return;
+    try{
+      var hoy=_today(); var done=_wk()[hoy];
+      var d=document.createElement('div'); d.id='v48-logbtn'; d.style.cssText='margin:0 0 14px;';
+      d.innerHTML='<button onclick="openWorkoutLog()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(120deg,#8b5cff,#ff2d95,#ff7a1a);color:#fff;border:none;border-radius:14px;padding:14px;font-size:13px;font-weight:800;cursor:pointer;box-shadow:0 8px 22px rgba(255,45,149,.3);font-family:-apple-system,BlinkMacSystemFont,sans-serif;">🏋 '+(done?'Editar entreno de hoy ✓':'Registrar entreno de hoy')+'</button>'
+        +(done?'<div style="text-align:center;font-size:10px;color:#33e08a;margin-top:6px;">✓ Ya registraste tu entreno de hoy</div>':'');
+      var sh=el.querySelector('.sh'); if(sh&&sh.parentNode){ sh.parentNode.insertBefore(d, sh.nextSibling); } else { el.insertBefore(d, el.firstChild); }
+    }catch(e){ console.warn('[v48]',e); }
+  };
+
+  /* ---- CAPA PERSONAL: te habla a ti y a tu objetivo ---- */
+  window._focoPersonal=function(){
+    var g=((S.user&&S.user.goalType)||'').toLowerCase();
+    if(/definir|marcar|grasa|bajar/.test(g)) return 'Para marcar: prioriza proteína, mantén el déficit y evita lo que te hinche. Cada serie al fallo cuenta.';
+    if(/músculo|musculo|ganar/.test(g)) return 'Para ganar músculo: come en superávit, sube el peso o las reps cada semana y no falles la proteína.';
+    if(/recompos/.test(g)) return 'Recomposición: entrena fuerte, proteína alta y déficit ligero. Paciencia — el espejo manda más que la báscula.';
+    return 'Define tu objetivo y te digo exactamente en qué enfocarte.';
+  };
+  var _rb=renderBrief;
+  renderBrief=function(){
+    _rb.apply(this,arguments);
+    try{
+      var el=document.getElementById('s-brief'); if(!el) return;
+      var hero=el.querySelector('.v39-hero'); if(!hero) return;
+      if(hero.querySelector('#v48-foco')) return;
+      if(!(S.user&&S.user.goalConfirmed)) return; /* solo cuando ya hay objetivo */
+      var f=document.createElement('div'); f.id='v48-foco';
+      f.style.cssText='margin-top:14px;padding:12px 14px;border-radius:12px;background:rgba(139,92,255,.10);border:1px solid rgba(139,92,255,.22);font-size:12px;color:var(--t2);line-height:1.5;text-align:left;';
+      f.innerHTML='<span style="color:#c9b8ff;font-weight:700;">Dave, tu enfoque:</span> '+_focoPersonal();
+      var conf=hero.querySelector('.v40-conf'); if(conf&&conf.parentNode){ conf.parentNode.insertBefore(f, conf.nextSibling); } else { hero.appendChild(f); }
+    }catch(e){ console.warn('[v48 foco]',e); }
+  };
+
+  try{ APP_VERSION="v48"; APP_BUILD="2026-08-19";
+    var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+  }catch(e){}
+})();
+
 </script>
 
   <button id="ai-chat-btn" onclick="toggleChat()" title="Coach AI">&#x1F4AC;</button>
