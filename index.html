@@ -7539,6 +7539,102 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
   }catch(e){}
 })();
 
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V50 — RESET DE SCAN AL CAMBIAR OBJETIVO + REVISIÓN CADA 2 SEMANAS
+   (1) Cambiar objetivo también borra el "Estimado por foto (IA)" (S.scan)
+       → hay que re-escanear (nuevo objetivo = nueva referencia).
+   (2) Cada 2 semanas se evalúa el progreso (positivo/negativo/estancado)
+       y se recomienda reajustar dieta/rutina, usando tus check-ins reales.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v50) return; window.__v50=true;
+
+  /* ---- (1) cambiar objetivo también resetea el scan ---- */
+  var _sgt=window.setGoalType;
+  window.setGoalType=function(g){
+    var prev=S.user&&S.user.goalType;
+    _sgt.apply(this,arguments);
+    if(prev && prev!==g){
+      S.scan=null; S.metrics._bfFromScan=false;
+      try{ Store.save(); }catch(e){}
+      try{ var be=document.getElementById('s-body'); if(be) renderBodyCol(); }catch(e){}
+    }
+  };
+
+  /* ---- (2) REVISIÓN CADA 2 SEMANAS ---- */
+  function _daysSince(iso){ try{ if(!iso) return null; return Math.floor((Date.now()-new Date(iso).getTime())/86400000); }catch(e){ return null; } }
+  window._reviewStatus=function(){
+    var plan=S.dietPlan||S.trainPlan;
+    var planIso=(S.dietPlan&&S.dietPlan.at)||(S.trainPlan&&S.trainPlan.at)||null;
+    var last=null; try{ last=localStorage.getItem('_lastReview'); }catch(e){}
+    var since=_daysSince(last||planIso);
+    var due=(plan && since!=null && since>=14);
+    /* veredicto por tendencia de check-ins */
+    var ci=(S.checkins||[]).slice(0,5);
+    var verdict=null, dW=null, msg='';
+    if(ci.length>=2){
+      dW=+(Number(ci[0].weight)-Number(ci[ci.length-1].weight)).toFixed(1);
+      var g=((S.user&&S.user.goalType)||'').toLowerCase();
+      var quiereBajar=/definir|marcar|grasa|bajar/.test(g), quiereSubir=/músculo|musculo|ganar/.test(g), recomp=/recompos/.test(g);
+      if(quiereBajar){ verdict = dW<=-0.3?'positivo':(dW>=0.3?'negativo':'estancado'); }
+      else if(quiereSubir){ verdict = dW>=0.2?'positivo':(dW<=-0.2?'negativo':'estancado'); }
+      else if(recomp){ verdict = Math.abs(dW)<0.8?'positivo':'revisar'; }
+      else { verdict='revisar'; }
+      var dir=(dW>0?'+':'')+dW+'kg';
+      if(verdict==='positivo') msg='Vas bien ('+dir+' en '+ci.length+' check-ins). Mantén el rumbo o afina un poco.';
+      else if(verdict==='estancado') msg='Progreso estancado ('+dir+'). Toca ajustar calorías/volumen.';
+      else if(verdict==='negativo') msg='Vas en dirección contraria a tu objetivo ('+dir+'). Reajusta el plan.';
+      else msg='Peso '+dir+'. En recomposición mira también fotos y medidas, no solo la báscula.';
+    } else {
+      msg='Registra tu peso para poder evaluar tu progreso.';
+    }
+    return {due:due, since:since, verdict:verdict, dW:dW, msg:msg, hasCheckins:ci.length>=2};
+  };
+  window._marcarRevisado=function(){ try{ localStorage.setItem('_lastReview', new Date().toISOString()); }catch(e){}
+    try{ renderBrief(); var ne=document.getElementById('s-nutrition'); if(ne){ne._r=0;renderNutrition();} }catch(e){} };
+  window._reajustarPlan=function(){
+    _marcarRevisado();
+    notif('Reajustando','La IA usará tu progreso para afinar la dieta','✨');
+    try{ if(typeof aiFullDiet==='function') aiFullDiet(); }catch(e){}
+  };
+
+  function reviewBanner(){
+    var r=_reviewStatus(); if(!r.due) return null;
+    var col=r.verdict==='positivo'?'#33e08a':r.verdict==='negativo'?'#ff6b81':'#ffa64d';
+    var d=document.createElement('div'); d.id='v50-review';
+    d.style.cssText='margin-top:14px;padding:14px;border-radius:14px;background:rgba(255,166,77,.08);border:1px solid '+col+'55;';
+    d.innerHTML='<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="font-size:16px;">⏰</span>'
+      +'<span style="font-size:13px;font-weight:800;color:var(--t1);font-family:-apple-system,BlinkMacSystemFont,sans-serif;">Revisión de 2 semanas</span>'
+      +'<span style="margin-left:auto;font-size:9px;color:'+col+';font-weight:700;text-transform:uppercase;">'+(r.verdict||'')+'</span></div>'
+      +'<div style="font-size:12px;color:var(--t2);line-height:1.5;margin-bottom:10px;">'+r.msg+'</div>'
+      +'<div style="display:flex;gap:8px;">'
+      +(r.hasCheckins?'<button onclick="_reajustarPlan()" style="flex:1;background:linear-gradient(120deg,#8b5cff,#ff2d95,#ff7a1a);color:#fff;border:none;border-radius:10px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;">✨ Reajustar plan con IA</button>':'<button onclick="openProgress&&openProgress()" style="flex:1;background:rgba(139,92,255,.15);border:1px solid rgba(139,92,255,.4);color:#c9b8ff;border-radius:10px;padding:10px;font-size:12px;font-weight:700;cursor:pointer;">Registrar mi peso</button>')
+      +'<button onclick="_marcarRevisado()" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);color:var(--t3);border-radius:10px;padding:10px 14px;font-size:12px;cursor:pointer;">Después</button>'
+      +'</div>';
+    return d;
+  }
+
+  /* mostrar el banner en el hero (Inicio) cuando toca revisar */
+  var _rb=renderBrief;
+  renderBrief=function(){
+    _rb.apply(this,arguments);
+    try{
+      var el=document.getElementById('s-brief'); if(!el) return;
+      var hero=el.querySelector('.v39-hero'); if(!hero||hero.querySelector('#v50-review')) return;
+      if(!(S.user&&S.user.goalConfirmed)) return;
+      var b=reviewBanner(); if(!b) return;
+      var foco=hero.querySelector('#v48-foco');
+      if(foco&&foco.parentNode){ foco.parentNode.insertBefore(b, foco.nextSibling); } else { hero.appendChild(b); }
+    }catch(e){ console.warn('[v50]',e); }
+  };
+
+  try{ APP_VERSION="v50"; APP_BUILD="2026-08-20";
+    var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+  }catch(e){}
+})();
+
 </script>
 
   <button id="ai-chat-btn" onclick="toggleChat()" title="Coach AI">&#x1F4AC;</button>
