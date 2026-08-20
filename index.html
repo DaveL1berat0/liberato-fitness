@@ -6934,7 +6934,7 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
         }
         var pd=document.createElement('div'); pd.className='card'; pd.id='v45-plan'; pd.style.marginTop='16px';
         pd.innerHTML='<div class="cl">Plan y duración</div>'
-          +'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05);"><span style="font-size:12px;color:var(--t2);">Mantener esta dieta</span><span style="font-size:16px;font-weight:800;color:var(--t1);">'+(S.dietPlan.semanas||'—')+' <span style="font-size:10px;color:var(--t3);font-weight:400;">semanas</span></span></div>'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05);"><span style="font-size:12px;color:var(--t2);">Revisar y ajustar</span><span style="font-size:15px;font-weight:800;color:#33e08a;">cada 2 <span style="font-size:10px;color:var(--t3);font-weight:400;">semanas</span></span></div>'+(S.dietPlan.semanas?('<div style="font-size:10px;color:var(--t3);margin-top:6px;">Fase estimada por la IA: ~'+S.dietPlan.semanas+' semanas (se ajusta en cada revisión de 2).</div>'):'')
           +(S.dietPlan.reevaluar?'<div style="font-size:11.5px;color:var(--t3);line-height:1.5;margin-top:8px;"><b style="color:var(--t2);">Reevaluar:</b> '+esc(S.dietPlan.reevaluar)+'</div>':'')
           +(adapt?'<div style="font-size:11.5px;color:'+(adapt.charAt(0)==='⚠'?'#ffa64d':'#33e08a')+';line-height:1.5;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06);">'+adapt+'</div>':'<div style="font-size:11px;color:var(--t3);margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06);">Registra tu peso para que la IA sepa si ajustar el plan.</div>')
           +'</div>';
@@ -6955,7 +6955,7 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
       var pd=document.createElement('div'); pd.className='card'; pd.id='v45-trainplan'; pd.style.marginTop='16px';
       pd.innerHTML='<div class="cl">Método y duración</div>'
         +(tp.metodo?'<div style="font-size:11.5px;color:var(--t2);line-height:1.5;margin-top:6px;">'+esc(tp.metodo)+'</div>':'')
-        +'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05);margin-top:6px;"><span style="font-size:12px;color:var(--t2);">Seguir esta rutina</span><span style="font-size:16px;font-weight:800;color:var(--t1);">'+(tp.semanas||'—')+' <span style="font-size:10px;color:var(--t3);font-weight:400;">semanas</span></span></div>'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05);margin-top:6px;"><span style="font-size:12px;color:var(--t2);">Revisar la rutina</span><span style="font-size:15px;font-weight:800;color:#33e08a;">cada 2 <span style="font-size:10px;color:var(--t3);font-weight:400;">semanas</span></span></div>'+(tp.semanas?('<div style="font-size:10px;color:var(--t3);margin-top:6px;">Fase estimada: ~'+tp.semanas+' semanas (se ajusta en cada revisión de 2).</div>'):'')
         +(tp.progresion?'<div style="font-size:11.5px;color:var(--t3);line-height:1.5;margin-top:8px;"><b style="color:var(--t2);">Progresión:</b> '+esc(tp.progresion)+'</div>':'')
         +'</div>';
       el.appendChild(pd);
@@ -7631,6 +7631,70 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
   };
 
   try{ APP_VERSION="v50"; APP_BUILD="2026-08-20";
+    var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+  }catch(e){}
+})();
+
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V51 — SCAN SIN FOTOS = VACÍO + CHAT QUE ABRE BIEN
+   (1) "Estimado por foto (IA)" solo se muestra si HAY fotos subidas; si no
+       hay foto, aparece vacío (no se queda con resultados viejos).
+   (3) El panel del Coach abre ya ajustado (sin tener que redimensionar).
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v51) return; window.__v51=true;
+
+  function _hasPhotos(){ return !!(S.photos && ['main','p1','p2','p3','p4'].some(function(k){ return S.photos[k]; })); }
+
+  /* (1) al renderizar métricas, si no hay fotos, no mostrar la estimación vieja */
+  if(typeof window._v44MetricsHTML==='function'){
+    var _orig=window._v44MetricsHTML;
+    window._v44MetricsHTML=function(){
+      if(_hasPhotos()) return _orig.apply(this, arguments);
+      var saved=S.scan; S.scan=null;
+      var html=_orig.apply(this, arguments);
+      S.scan=saved;
+      return html;
+    };
+  }
+  /* al quitar la última foto, limpiar la estimación */
+  if(typeof window._removePhoto==='function'){
+    var _rp=window._removePhoto;
+    window._removePhoto=function(key,ev){
+      _rp.apply(this, arguments);
+      if(!_hasPhotos() && S.scan){ S.scan=null; try{Store.save();}catch(e){} try{ if(typeof renderBodyCol==='function') renderBodyCol(); }catch(e){} }
+    };
+  }
+
+  /* (3) apertura robusta del Coach */
+  window._chatFit=function(){
+    var p=document.getElementById('ai-chat-panel'); if(!p||!p.classList.contains('open')) return;
+    var vv=window.visualViewport;
+    if(vv){ p.style.height=vv.height+'px'; p.style.top=(vv.offsetTop||0)+'px'; p.style.bottom='auto'; }
+    else { p.style.height=''; p.style.top=''; p.style.bottom=''; }
+    var msgs=document.getElementById('chat-msgs'); if(msgs) msgs.scrollTop=msgs.scrollHeight;
+  };
+  window.toggleChat=function(){
+    var p=document.getElementById('ai-chat-panel'); if(!p) return;
+    var opening=!p.classList.contains('open');
+    /* limpiar estilos previos SIEMPRE antes de animar */
+    p.style.height=''; p.style.top=''; p.style.bottom='';
+    p.classList.toggle('open');
+    if(opening){
+      try{ requestAnimationFrame(function(){ _chatFit(); }); }catch(e){}
+      setTimeout(_chatFit, 130); setTimeout(_chatFit, 320);
+      var msgs=document.getElementById('chat-msgs'); if(msgs) setTimeout(function(){ msgs.scrollTop=msgs.scrollHeight; },180);
+    }
+  };
+  (function(){
+    var vv=window.visualViewport; if(!vv) return;
+    vv.addEventListener('resize', function(){ _chatFit(); });
+    vv.addEventListener('scroll', function(){ _chatFit(); });
+  })();
+
+  try{ APP_VERSION="v51"; APP_BUILD="2026-08-20";
     var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
   }catch(e){}
 })();
