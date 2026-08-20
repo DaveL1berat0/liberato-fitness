@@ -6773,6 +6773,201 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
   };
 })();
 
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V45 — IA MÁS INTELIGENTE: razonamiento, suplementos, métodos, duración
+   Dave: (1) recomendar suplementos si ayudan, (2) métodos de entreno
+   variados (al fallo/RIR, no solo 3x12) con base en evidencia, (3) dieta
+   con el PORQUÉ (evita el pan porque hincha, más carne roja que pescado),
+   (5) cuánto tiempo con el plan y que se adapte al progreso.
+   Verificado en vivo: qwen devuelve reglas con motivo + suplementos +
+   semanas con reasoning_effort:none.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v45) return; window.__v45=true;
+  /* persistir plan/suplementos */
+  try{ var x=JSON.parse(localStorage.getItem('pf1x')||'null');
+    if(x){ if(x.supplements)S.supplements=x.supplements; if(x.dietPlan)S.dietPlan=x.dietPlan; if(x.trainPlan)S.trainPlan=x.trainPlan; } }catch(e){}
+  (function(){ var _s=Store.save; Store.save=function(){ var r=_s.apply(this,arguments);
+    try{ var c=JSON.parse(localStorage.getItem('pf1x')||'{}'); c.supplements=S.supplements||null; c.dietPlan=S.dietPlan||null; c.trainPlan=S.trainPlan||null; localStorage.setItem('pf1x',JSON.stringify(c)); }catch(e){} return r; }; })();
+
+  function esc(s){ return String(s==null?'':s).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
+
+  /* progreso reciente para adaptar */
+  function _trend(){
+    var ci=(S.checkins||[]).slice(0,4);
+    if(ci.length<2) return null;
+    var d=+(Number(ci[0].weight)-Number(ci[ci.length-1].weight)).toFixed(1);
+    return {dW:d, n:ci.length, first:ci[ci.length-1].date, last:ci[0].date};
+  }
+
+  /* ---- DIETA INTELIGENTE ---- */
+  window.aiFullDiet=async function(){
+    if(!_AKEY){ notif('Configura tu API key','Toca ⚙ en el Coach AI','&#x1F511;'); try{openApiKeySettings();}catch(e){} return; }
+    if(!(S.user&&S.user.goalConfirmed)){ notif('Confirma tu objetivo','Ve a Inicio y confírmalo','⚠'); try{_gotoGoal();}catch(e){} return; }
+    var ld=document.createElement('div'); ld.id='v36-diet-load';
+    ld.style.cssText='position:fixed;inset:0;background:rgba(6,4,14,.92);z-index:800;display:flex;flex-direction:column;align-items:center;justify-content:center;';
+    ld.innerHTML="<div style='font-size:34px;margin-bottom:14px;'>✨</div><div style='font-size:13px;color:var(--accent,#ff2d95);font-family:var(--mono);letter-spacing:2px;'>GENERANDO DIETA...</div><div style='font-size:11px;color:var(--t3);margin-top:8px;'>Con razonamiento y suplementos</div>";
+    document.body.appendChild(ld);
+    try{
+      var u=S.user||{}, m=S.metrics||{}, tr=_trend();
+      var perfil="objetivo: "+(u.goalType||'Recomposición')+". Meta "+(u.targetWeight||78)+"kg y "+(u.targetBF||10)+"% grasa, altura "+(u.height||178)+"cm"
+        +((m.weight>0)?(", peso actual "+m.weight+"kg y grasa "+(m.bodyFat||'?')+"%"):", (sin peso; usa la meta)");
+      var prefs=(u.foodPrefs&&u.foodPrefs.trim())?(" Preferencias/alergias a respetar: "+u.foodPrefs.trim()+"."):"";
+      var prog=tr?(" Progreso reciente: "+(tr.dW>0?'+':'')+tr.dW+"kg entre "+tr.first+" y "+tr.last+" ("+tr.n+" check-ins). Ajusta las calorías según si avanza o se estanca."):"";
+      var prompt="Eres nutricionista deportivo basado en evidencia (meta-análisis recientes). Perfil: "+perfil+"."+prefs+prog+"\n"
+        +"Restricciones REALES: SIN gluten ni trigo (gastritis), aceite de oliva crudo, min 50g carbos post-entreno, ayuno 12-16h.\n"
+        +"Diseña UN día completo de comidas para el objetivo. Calcula tú los targets diarios.\n"
+        +"Para CADA regla explica el PORQUÉ concreto (ej: evitar pan porque hincha y oculta el abdomen al definir; priorizar carne roja magra sobre pescado blanco por creatina/hierro/perfil de aminoácidos si conviene).\n"
+        +"Recomienda suplementos SOLO si el objetivo/datos lo justifican, con dosis y motivo.\n"
+        +"Estima cuántas SEMANAS mantener esta dieta antes de reevaluar, y qué medir para ajustar.\n"
+        +"Responde SOLO JSON sin markdown: "
+        +'{"targets":{"kcal":N,"p":N,"c":N,"f":N},'
+        +'"meals":{"breakfast":[{"name":"...","qty":N,"unit":"g","p":N,"c":N,"f":N,"kcal":N}],"lunch":[...],"snacks":[...],"dinner":[...]},'
+        +'"rules":[{"regla":"...","porque":"..."}],'
+        +'"supplements":[{"nombre":"...","dosis":"...","motivo":"..."}],'
+        +'"semanas":N,"reevaluar":"que medir para ajustar"}';
+      var text=await _aiCall(prompt, 2800);
+      if(!text) return;
+      var jm=text.match(/\{[\s\S]*\}/); if(!jm) throw new Error('La IA no devolvió JSON');
+      var p=JSON.parse(jm[0]); var meals=p.meals||{};
+      ['breakfast','lunch','dinner','snacks'].forEach(function(k){ if(!Array.isArray(meals[k])) meals[k]=[]; });
+      if(!meals.breakfast.length && !meals.lunch.length && !meals.dinner.length) throw new Error('Estructura de dieta inválida');
+      S.meals=meals;
+      var t=_calcTotals(S.meals);
+      S.nutrition.calories.current=t.k; S.nutrition.protein.current=t.p; S.nutrition.carbs.current=t.c; S.nutrition.fat.current=t.f;
+      if(p.targets){ var tg=p.targets;
+        if(tg.kcal)S.nutrition.calories.target=Math.round(tg.kcal); if(tg.p)S.nutrition.protein.target=Math.round(tg.p);
+        if(tg.c)S.nutrition.carbs.target=Math.round(tg.c); if(tg.f)S.nutrition.fat.target=Math.round(tg.f); }
+      S.dietRules=Array.isArray(p.rules)?p.rules:null;
+      S.supplements=Array.isArray(p.supplements)?p.supplements:null;
+      S.dietPlan={semanas:p.semanas||null, reevaluar:p.reevaluar||'', at:new Date().toISOString()};
+      Store.save();
+      var ne=document.getElementById('s-nutrition'); if(ne){ne._r=0;renderNutrition();}
+      notif('Dieta generada','Comidas, macros, reglas con motivo y suplementos','✨');
+    }catch(e){ console.error('[aiFullDiet v45]',e); notif('Error IA',(e&&e.message)||'No se pudo generar','⚠'); }
+    finally{ var l=document.getElementById('v36-diet-load'); if(l) l.remove(); }
+  };
+
+  /* ---- RUTINA INTELIGENTE (métodos/al fallo/RIR + duración) ---- */
+  window.genRoutineAI=async function(protocol){
+    if(!protocol){ var sel=document.getElementById('v36-proto'); protocol=sel?sel.value:'Push/Pull/Legs'; }
+    if(!_AKEY){ notif('Configura tu API key','Toca ⚙ en el Coach AI','&#x1F511;'); try{openApiKeySettings();}catch(e){} return; }
+    if(!(S.user&&S.user.goalConfirmed)){ notif('Confirma tu objetivo','Ve a Inicio y confírmalo','⚠'); try{_gotoGoal();}catch(e){} return; }
+    var ld=document.createElement('div'); ld.id='v36-rout-load';
+    ld.style.cssText='position:fixed;inset:0;background:rgba(6,4,14,.92);z-index:800;display:flex;flex-direction:column;align-items:center;justify-content:center;';
+    ld.innerHTML="<div style='font-size:34px;margin-bottom:14px;'>✨</div><div style='font-size:13px;color:var(--accent,#ff2d95);font-family:var(--mono);letter-spacing:2px;'>GENERANDO RUTINA...</div><div style='font-size:11px;color:var(--t3);margin-top:8px;'>"+protocol+" · métodos por evidencia</div>";
+    document.body.appendChild(ld);
+    try{
+      var u=S.user||{}, m=S.metrics||{};
+      var perfil="objetivo "+(u.goalType||'Recomposición')+", meta "+(u.targetWeight||78)+"kg y "+(u.targetBF||10)+"% grasa"+((m.weight>0)?(", peso "+m.weight+"kg, grasa "+(m.bodyFat||'?')+"%"):"");
+      var prompt="Eres entrenador de fuerza basado en evidencia. Perfil: "+perfil+". Protocolo: "+protocol+". Sesiones 30-45 min.\n"
+        +"Aplica ciencia reciente: no todo es 3x12. Prescribe el MÉTODO por ejercicio según el objetivo — rangos variados (fuerza 3-6, hipertrofia 6-12, resistencia 15-20), proximidad al fallo (RIR 0-3, últimas series al fallo en aislamientos), y técnicas cuando aporten (drop sets, rest-pause, series myo-reps) explicando por qué.\n"
+        +"Estima cuántas SEMANAS seguir esta rutina antes de progresar/cambiar.\n"
+        +"Responde SOLO JSON sin markdown: "
+        +'{"days":[{"nm":"MON","ty":"EMPUJE","cd":"","col":"#8b5cff","ex":[{"nm":"...","cat":"Chest","sets":3,"reps":"6-10","rest":"90s","rpe":8,"metodo":"al fallo|RIR 2|drop set|normal"}]}],'
+        +'"metodo":"resumen del enfoque de intensidad","semanas":N,"progresion":"como progresar cada semana"}';
+      var text=await _aiCall(prompt, 2800);
+      if(!text) return;
+      var jm=text.match(/\{[\s\S]*\}/); if(!jm) throw new Error('La IA no devolvió JSON');
+      var p=JSON.parse(jm[0]);
+      if(!p.days||!p.days.length) throw new Error('La IA no devolvió días');
+      S.customDays=p.days;
+      S.trainPlan={metodo:p.metodo||'', semanas:p.semanas||null, progresion:p.progresion||'', at:new Date().toISOString()};
+      Store.save();
+      var te=document.getElementById('s-training'); if(te){te._r=0;rTrain();}
+      notif('Rutina generada','Con métodos de intensidad y progresión','✨');
+    }catch(e){ console.error('[genRoutineAI v45]',e); notif('Error IA',(e&&e.message)||'No se pudo generar','⚠'); }
+    finally{ var l=document.getElementById('v36-rout-load'); if(l) l.remove(); }
+  };
+
+  /* ---- NUTRICIÓN: reglas con motivo + suplementos + plan/duración ---- */
+  var _rn=renderNutrition;
+  renderNutrition=function(){
+    _rn.apply(this,arguments);
+    var el=document.getElementById('s-nutrition'); if(!el) return;
+    if(!(S.user&&S.user.goalConfirmed)) return; /* gate activo */
+    try{
+      /* 1) reglas con porqué */
+      var cards=el.querySelectorAll('.card');
+      cards.forEach(function(c){
+        var cl=c.querySelector('.cl');
+        if(cl && /Reglas de tu Dieta/.test(cl.textContent)){
+          var rules=S.dietRules;
+          if(rules && rules.length && typeof rules[0]==='object'){
+            var box=c.querySelector('div'); // primer contenedor tras .cl
+            var inner=cl.nextElementSibling;
+            var H='';
+            rules.forEach(function(r){
+              H+='<div class="v36-rule" style="flex-direction:column;align-items:flex-start;gap:3px;">'
+                +'<div style="display:flex;gap:8px;"><span class="v36-rule-ic">✓</span><span class="v36-rule-tx" style="font-weight:600;color:var(--t1);">'+esc(r.regla||r)+'</span></div>'
+                +(r.porque?'<div style="font-size:11px;color:var(--t3);line-height:1.45;padding-left:22px;">'+esc(r.porque)+'</div>':'')
+                +'</div>';
+            });
+            if(inner) inner.innerHTML=H;
+          }
+        }
+      });
+      /* 2) suplementos */
+      if(S.supplements && S.supplements.length && !document.getElementById('v45-supps')){
+        var sd=document.createElement('div'); sd.className='card'; sd.id='v45-supps'; sd.style.marginTop='16px';
+        var sh='<div class="cl">Suplementos sugeridos por la IA</div><div style="margin-top:8px;">';
+        S.supplements.forEach(function(s){
+          sh+='<div class="v36-rule" style="flex-direction:column;align-items:flex-start;gap:3px;">'
+            +'<div style="display:flex;gap:8px;justify-content:space-between;width:100%;"><span style="font-weight:700;color:var(--t1);font-size:12.5px;">💊 '+esc(s.nombre||'')+'</span><span style="font-size:11px;color:var(--cyan);font-family:var(--mono);">'+esc(s.dosis||'')+'</span></div>'
+            +(s.motivo?'<div style="font-size:11px;color:var(--t3);line-height:1.45;">'+esc(s.motivo)+'</div>':'')+'</div>';
+        });
+        sh+='<div style="font-size:10px;color:var(--t3);margin-top:8px;">Sugerencia informativa, no prescripción médica. Consulta si tienes condiciones.</div></div>';
+        sd.innerHTML=sh; el.appendChild(sd);
+      }
+      /* 3) plan/duración + adaptación */
+      if(S.dietPlan && !document.getElementById('v45-plan')){
+        var tr=_trend();
+        var adapt='';
+        if(tr){
+          var goal=(S.user.goalType||'').toLowerCase();
+          var quiereBajar=/grasa|definir/.test(goal), quiereSubir=/músculo|musculo|ganar/.test(goal);
+          if(quiereBajar && tr.dW>=0 && tr.n>=2) adapt='⚠ Tu peso no baja ('+(tr.dW>0?'+':'')+tr.dW+'kg). Considera regenerar la dieta para ajustar calorías.';
+          else if(quiereSubir && tr.dW<=0 && tr.n>=2) adapt='⚠ No estás subiendo ('+tr.dW+'kg). Considera regenerar para subir calorías.';
+          else adapt='✓ Vas en línea con tu objetivo ('+(tr.dW>0?'+':'')+tr.dW+'kg en '+tr.n+' check-ins).';
+        }
+        var pd=document.createElement('div'); pd.className='card'; pd.id='v45-plan'; pd.style.marginTop='16px';
+        pd.innerHTML='<div class="cl">Plan y duración</div>'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05);"><span style="font-size:12px;color:var(--t2);">Mantener esta dieta</span><span style="font-size:16px;font-weight:800;color:var(--t1);">'+(S.dietPlan.semanas||'—')+' <span style="font-size:10px;color:var(--t3);font-weight:400;">semanas</span></span></div>'
+          +(S.dietPlan.reevaluar?'<div style="font-size:11.5px;color:var(--t3);line-height:1.5;margin-top:8px;"><b style="color:var(--t2);">Reevaluar:</b> '+esc(S.dietPlan.reevaluar)+'</div>':'')
+          +(adapt?'<div style="font-size:11.5px;color:'+(adapt.charAt(0)==='⚠'?'#ffa64d':'#33e08a')+';line-height:1.5;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06);">'+adapt+'</div>':'<div style="font-size:11px;color:var(--t3);margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06);">Registra tu peso para que la IA sepa si ajustar el plan.</div>')
+          +'</div>';
+        el.appendChild(pd);
+      }
+    }catch(e){ console.warn('[v45 nutrition]',e); }
+  };
+
+  /* ---- ENTRENO: método de intensidad + duración ---- */
+  var _rt=rTrain;
+  rTrain=function(){
+    _rt.apply(this,arguments);
+    var el=document.getElementById('s-training'); if(!el) return;
+    if(!(S.user&&S.user.goalConfirmed)) return;
+    if(!S.trainPlan || document.getElementById('v45-trainplan')) return;
+    try{
+      var tp=S.trainPlan;
+      var pd=document.createElement('div'); pd.className='card'; pd.id='v45-trainplan'; pd.style.marginTop='16px';
+      pd.innerHTML='<div class="cl">Método y duración</div>'
+        +(tp.metodo?'<div style="font-size:11.5px;color:var(--t2);line-height:1.5;margin-top:6px;">'+esc(tp.metodo)+'</div>':'')
+        +'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05);margin-top:6px;"><span style="font-size:12px;color:var(--t2);">Seguir esta rutina</span><span style="font-size:16px;font-weight:800;color:var(--t1);">'+(tp.semanas||'—')+' <span style="font-size:10px;color:var(--t3);font-weight:400;">semanas</span></span></div>'
+        +(tp.progresion?'<div style="font-size:11.5px;color:var(--t3);line-height:1.5;margin-top:8px;"><b style="color:var(--t2);">Progresión:</b> '+esc(tp.progresion)+'</div>':'')
+        +'</div>';
+      el.appendChild(pd);
+    }catch(e){ console.warn('[v45 train]',e); }
+  };
+
+  /* versión */
+  try{ APP_VERSION="v45"; APP_BUILD="2026-08-19";
+    var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+  }catch(e){}
+})();
+
 </script>
 
   <button id="ai-chat-btn" onclick="toggleChat()" title="Coach AI">&#x1F4AC;</button>
