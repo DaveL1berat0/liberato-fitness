@@ -1532,8 +1532,8 @@ function renderBodyCol(){
             '<div class="sc-corner sc-tl"></div><div class="sc-corner sc-tr2"></div>'+
             '<div class="sc-corner sc-bl"></div><div class="sc-corner sc-br"></div>'+
             '<div class="sc-tag" style="top:10px;left:50%;transform:translateX(-50%);">ESCANEO &middot; PROJECT LIBERATO</div>'+
-            '<div class="sc-tag" style="bottom:10px;left:8px;">'+m.bodyFat+'% GRASA</div>'+
-            '<div class="sc-tag" style="bottom:10px;right:8px;">'+m.leanMass+'kg MAGRA</div>'+
+            (S.scan&&S.scan.bodyFatMin!=null&&S.scan.bodyFatMax!=null&&!(S.scan.bodyFatMin<=0&&S.scan.bodyFatMax>=100)?('<div class="sc-tag" style="bottom:10px;left:8px;">~'+S.scan.bodyFatMin+'-'+S.scan.bodyFatMax+'% GRASA</div>'):((m.bodyFat>0&&S.metrics._fromReport)?('<div class="sc-tag" style="bottom:10px;left:8px;">'+m.bodyFat+'% GRASA</div>'):''))+
+            (m.leanMass>0?('<div class="sc-tag" style="bottom:10px;right:8px;">'+m.leanMass+'kg MAGRA</div>'):'')+
           '</div>'+
         '</div>'+
         '<div class="pg" style="margin-top:8px;flex-shrink:0;">'+pg+'</div>'+
@@ -6659,9 +6659,16 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
 
   /* ---- MÉTRICAS CLAVE = 2 bloques honestos ---- */
   function row(lb,val,unit,tag){
-    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.04);">'
-      +'<span style="font-size:11px;color:var(--t3);font-family:var(--mono);letter-spacing:.5px;">'+lb+(tag?(' <span style="font-size:7px;background:rgba(139,92,255,.25);color:#c9b8ff;padding:1px 5px;border-radius:6px;">IA</span>'):'')+'</span>'
-      +'<span style="font-size:14px;font-weight:700;color:'+(val==='—'?'var(--t3)':'var(--t1)')+';">'+val+(val!=='—'&&unit?(' <span style="font-size:9px;color:var(--t2);font-weight:400;">'+unit+'</span>'):'')+'</span></div>';
+    var v=String(val);
+    var lbl='<span style="font-size:11px;color:var(--t3);font-family:var(--mono);letter-spacing:.5px;">'+lb+(tag?(' <span style="font-size:7px;background:rgba(139,92,255,.25);color:#c9b8ff;padding:1px 5px;border-radius:6px;vertical-align:middle;">IA</span>'):'')+'</span>';
+    if(v.length>20){ /* texto descriptivo: apilado y legible dentro del marco */
+      return '<div style="padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04);">'
+        +'<div style="margin-bottom:5px;">'+lbl+'</div>'
+        +'<div style="font-size:12.5px;font-weight:500;color:var(--t2);line-height:1.5;">'+v+'</div></div>';
+    }
+    return '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.04);">'
+      +lbl
+      +'<span style="font-size:14px;font-weight:700;text-align:right;color:'+(v==='—'?'var(--t3)':'var(--t1)')+';">'+v+(v!=='—'&&unit?(' <span style="font-size:9px;color:var(--t2);font-weight:400;">'+unit+'</span>'):'')+'</span></div>';
   }
   window._v44MetricsHTML=function(){
     var sc=S.scan, m=S.metrics||{}, u=S.user||{};
@@ -7695,6 +7702,44 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
   })();
 
   try{ APP_VERSION="v51"; APP_BUILD="2026-08-20";
+    var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+  }catch(e){}
+})();
+
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V52 — OPENAI (gpt-4o visión) + PERSONALIDAD/EVIDENCIA REFORZADA
+   Dave usa una key de OpenAI (sk-...) para esta app (separada de Groq).
+   La app ya es multi-proveedor; aquí subimos el modelo de visión a gpt-4o
+   y reforzamos el conocimiento (ciencia del deporte peer-reviewed) y el
+   tono de coach personal. La KEY NO se embebe (repo público → se expone y
+   OpenAI la revoca); se pega una vez en ⚙ y persiste (URL fija).
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v52) return; window.__v52=true;
+
+  /* visión: gpt-4o (mejor lectura corporal); texto sigue en gpt-4o-mini (coste) */
+  _getVisionModel=function(){
+    var p=_getProvider();
+    if(p==='groq')   return 'qwen/qwen3.6-27b';
+    if(p==='openai') return 'gpt-4o';
+    return 'claude-sonnet-4-6';
+  };
+
+  /* directriz de evidencia + personalidad de coach personal (más fuerte) */
+  window._EVID='Actúa como un coach de élite basado en EVIDENCIA (fisiología del ejercicio y nutrición deportiva revisadas por pares: '
+    +'meta-análisis recientes, líneas de trabajo tipo Schoenfeld/Helms/ACSM y literatura de universidades como Harvard/Stanford). '
+    +'Principios: frecuencia 2x/semana por músculo suele superar 1x para hipertrofia; el estímulo útil está cerca del fallo (RIR 0-3); '
+    +'rangos 6-12 son eficientes en tiempo aunque 5-30 crecen con proximidad al fallo; volumen mínimo efectivo ~10 series/músculo/semana; '
+    +'proteína 1.6-2.2 g/kg; sobrecarga progresiva; prioriza compuestos y EFICIENCIA de tiempo (máximo resultado por hora invertida). '
+    +'Habla directo y personal, enfocado SIEMPRE en el objetivo del usuario y en lo que más lo acerca a su meta. '
+    +'Esto viene de tu conocimiento entrenado (no de una búsqueda web en vivo); si algo es incierto o individual, dilo con honestidad. No es consejo médico.';
+
+  /* etiqueta del proveedor en el setup */
+  try{ var _oi=document.getElementById('setup-desc'); }catch(e){}
+
+  try{ APP_VERSION="v52"; APP_BUILD="2026-08-20";
     var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
   }catch(e){}
 })();
