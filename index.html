@@ -1289,7 +1289,7 @@ function rGoals(){
   ${S.goals.map(g=>`<div class="gi"><div class="gico">${g.icon}</div><div class="ginfo"><div class="gn">${g.name}</div><div class="gm">${g.current}${g.unit} → ${g.target}${g.unit}</div><div class="pb" style="margin-top:8px;"><div class="pf pc" style="width:${g.progress}%;background:linear-gradient(90deg,rgba(0,229,255,.3),var(--${g.color==='green'?'green':g.color==='blue'?'blue':g.color==='purple'?'purple':'cyan'}));"></div></div></div><div style="text-align:right;flex-shrink:0;"><div style="font-size:20px;font-weight:700;color:var(--cyan);font-family:var(--mono);">${g.progress}%</div><div style="font-size:9px;color:var(--t3);font-family:var(--mono);">${({HIGH:'ALTA',MED:'MEDIA',LOW:'BAJA'}[g.priority]||g.priority)}</div></div></div>`).join('')}
 </div>
 <div class="card">
-  <div class="cl">Objetivos recomendados por la IA</div>
+  <div class="cl">Macros diarios (según tu objetivo)</div>
   <div style="font-size:12px;color:var(--t3);margin-bottom:14px;">Ajustados a tu meta: <b style="color:#c9b8ff;">${(S.user&&S.user.goalType)||'define tu objetivo'}</b> — no los ajustas tú; los calcula la IA según tu objetivo.</div>
   ${(function(){
     var n=S.nutrition, dias=(S.customDays||[]).filter(function(d){return (d.ex||[]).length;}).length;
@@ -3656,7 +3656,7 @@ function _showApiKeyBanner(){return; /* replaced by setup overlay */
 
 /* ── Test API Key after saving ── */
 async function _testApiKey(key){
-  var p=(key.indexOf('gsk_')===0)?'Groq':(key.indexOf('sk-ant-')===0?'Anthropic':'OpenAI');
+  var p=(key.indexOf('gsk_')===0)?'Groq':((key.indexOf('AIza')===0||key.indexOf('AQ.')===0)?'Gemini':(key.indexOf('sk-ant-')===0?'Anthropic':'OpenAI'));
   notif("Verificando...","Conectando con "+p,"&#x23F3;");
   try{
     var tmpK=_AKEY; _AKEY=key;
@@ -3669,7 +3669,7 @@ async function _testApiKey(key){
     _AKEY=tmpK2;
     var res=await fetch(cfg.url,{method:'POST',headers:h,body:body});
     var data=await res.json();
-    if(res.ok&&(data.content||data.choices)){
+    if(res.ok&&(data.content||data.choices||data.candidates)){
       try{localStorage.setItem('_ak_ok','1');}catch(e){}
       notif("Conectado con "+p,"IA lista para usar","&#x2705;");
       _updateAiStatus();
@@ -3728,7 +3728,7 @@ async function setupSave(){
   btn.textContent='Verificando...';
   st.style.color='var(--cyan)';
   st.textContent='Conectando...';
-  var p=(key.indexOf('gsk_')===0)?'Groq':(key.indexOf('sk-ant-')===0?'Anthropic':'OpenAI');
+  var p=(key.indexOf('gsk_')===0)?'Groq':((key.indexOf('AIza')===0||key.indexOf('AQ.')===0)?'Gemini':(key.indexOf('sk-ant-')===0?'Anthropic':'OpenAI'));
   try{
     var tmpK=_AKEY; _AKEY=key;
     var cfg=_getApiConfig(); _AKEY=tmpK;
@@ -3740,7 +3740,7 @@ async function setupSave(){
     _AKEY=tmpK2;
     var res=await fetch(cfg.url,{method:'POST',headers:h,body:body});
     var data=await res.json();
-    if(res.ok&&(data.content||data.choices)){
+    if(res.ok&&(data.content||data.choices||data.candidates)){
       _setApiKey(key);
       try{localStorage.setItem('_ak_ok','1');}catch(e){}
       st.style.color='var(--green)';
@@ -4811,8 +4811,8 @@ _aiCallVision=async function(prompt, maxTokens, b64, mime){
   var tabs=[
     {ic:'🏠',lb:'Inicio',    t:'s-brief'},
     {ic:'📷',lb:'Cuerpo',    t:'s-body'},
-    {ic:'🍎',lb:'Dieta',     t:'s-nutrition'},
     {ic:'🏋️',lb:'Entreno',  t:'s-training'},
+    {ic:'🍎',lb:'Dieta',     t:'s-nutrition'},
     {ic:'📈',lb:'Progreso',  t:'s-timeline'}
   ];
   function build(){
@@ -7978,6 +7978,82 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
   try{ APP_VERSION="v55"; APP_BUILD="2026-08-20";
     var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
   }catch(e){}
+})();
+
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V56 — ORDEN DEL FLUJO + MACROS GATEADO + CHAT AUTO-SCROLL + GEMINI FIX
+   Orden correcto (Dave): Objetivo(Inicio) → Cuerpo(scan) → Entreno → Dieta
+   (macros) → Progreso. Reordena el DOM, gatea los macros hasta confirmar
+   objetivo, y mantiene el chat scrolleado al último mensaje.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v56) return; window.__v56=true;
+
+  /* (A) reordenar secciones: brief, body, training, nutrition, goals(macros), timeline */
+  function _reorder(){
+    var brief=document.getElementById('s-brief'); if(!brief) return false;
+    var content=document.getElementById('content'); var anchor=content||brief;
+    var order=['s-body','s-training','s-nutrition','s-goals','s-timeline'];
+    var ok=true;
+    order.forEach(function(id){
+      var el=document.getElementById(id); if(!el){ok=false;return;}
+      anchor.parentNode.insertBefore(el, anchor.nextSibling);
+      anchor=el;
+    });
+    return ok;
+  }
+  var _t=0, _iv=setInterval(function(){ _t++; if(_reorder()||_t>25) clearInterval(_iv); },300);
+  window.addEventListener('load', function(){ setTimeout(_reorder,400); });
+
+  /* (B) gatear MACROS/objetivos: no mostrar antes de confirmar objetivo */
+  if(typeof rGoals==='function'){
+    var _rg=rGoals;
+    rGoals=function(){
+      var el=document.getElementById('s-goals'); if(!el) return;
+      if(!(S.user&&S.user.goalConfirmed)){
+        el.innerHTML='<div class="card"><div class="v36-empty" style="margin:0;">'
+          +'<h4>Primero define tu objetivo</h4>'
+          +'<p>Tus <b>macros diarios</b> (calorías, proteína, carbos) aparecen aquí cuando confirmes tu objetivo en <b>Inicio</b> y generes tu dieta. Todo lleva su orden: objetivo → cuerpo → entreno → dieta → progreso.</p>'
+          +'<button class="v36-gen" onclick="_gotoGoal&&_gotoGoal()">Ir a definir mi objetivo</button>'
+          +'</div></div>';
+        el._r=1; return;
+      }
+      _rg.apply(this, arguments);
+    };
+  }
+
+  /* (C) chat: mantener siempre scrolleado al último mensaje cuando la IA habla */
+  function _hookChat(){
+    var msgs=document.getElementById('chat-msgs'); if(!msgs || msgs.__v56) return;
+    msgs.__v56=true;
+    try{
+      new MutationObserver(function(){ msgs.scrollTop=msgs.scrollHeight; })
+        .observe(msgs,{childList:true,subtree:true,characterData:true});
+    }catch(e){}
+  }
+  var _t2=0, _iv2=setInterval(function(){ _t2++; _hookChat(); if(document.getElementById('chat-msgs')||_t2>25) clearInterval(_iv2); },400);
+
+  try{ APP_VERSION="v56"; APP_BUILD="2026-08-20";
+    var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+  }catch(e){}
+})();
+
+
+/* V56b — _setApiKey consciente de Gemini (v53 no lo reconocía → perdía la 2ª key) */
+(function(){ if(window.__v56b) return; window.__v56b=true;
+  function _prov(k){ k=k||''; if(k.indexOf('gsk_')===0)return'groq'; if(k.indexOf('AIza')===0||k.indexOf('AQ.')===0)return'gemini'; if(k.indexOf('sk-ant-')===0)return'anthropic'; if(k.indexOf('sk-')===0)return'openai'; return'?'; }
+  window._setApiKey=function(k){
+    k=(k||'').trim();
+    try{
+      var old=localStorage.getItem('_ak')||'';
+      if(old && k && old!==k && _prov(old)!==_prov(k) && _prov(old)!=='?' && _prov(old)!=='openai'){ localStorage.setItem('_ak2', old); }
+      var bk=localStorage.getItem('_ak2')||''; if(bk===k) localStorage.removeItem('_ak2');
+    }catch(e){}
+    try{ _AKEY=k; }catch(e){}
+    try{ k?localStorage.setItem('_ak',k):(localStorage.removeItem('_ak'),localStorage.removeItem('_ak_ok')); }catch(e){}
+  };
 })();
 
 </script>
