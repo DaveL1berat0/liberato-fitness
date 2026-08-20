@@ -6968,6 +6968,135 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
   }catch(e){}
 })();
 
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V46 — IMPORTAR REPORTE DE BÁSCULA (InBody/PDF/foto) → MÉTRICAS
+   Dave: subir un PDF/reporte de esas máquinas que miden todo y que se
+   vuelquen en la app sin escribirlos a mano. La IA (visión) lee el
+   reporte y extrae peso, grasa, músculo, agua, IMC, TMB, etc. Verificado
+   en vivo: extrae los valores con precisión. PDF se rasteriza con pdf.js
+   (carga bajo demanda); si falla, se pide captura/foto.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v46) return; window.__v46=true;
+
+  function _loadPdfJs(){
+    return new Promise(function(res,rej){
+      if(window.pdfjsLib) return res(window.pdfjsLib);
+      var s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      s.onload=function(){ try{ window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }catch(e){} res(window.pdfjsLib); };
+      s.onerror=function(){ rej(new Error('No se pudo cargar el lector de PDF')); };
+      document.head.appendChild(s);
+    });
+  }
+  async function _pdfToImage(arrayBuffer){
+    var lib=await _loadPdfJs();
+    var pdf=await lib.getDocument({data:arrayBuffer}).promise;
+    var page=await pdf.getPage(1);
+    var vp=page.getViewport({scale:1.6});
+    var c=document.createElement('canvas'); c.width=vp.width; c.height=vp.height;
+    await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+    return c.toDataURL('image/jpeg',0.85);
+  }
+
+  window._importReport=function(){
+    var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*,application/pdf';
+    inp.onchange=async function(e){
+      var f=e.target.files&&e.target.files[0]; if(!f) return;
+      if(!_AKEY){ notif('Configura tu API key','Toca ⚙ en el Coach AI','&#x1F511;'); try{openApiKeySettings();}catch(e2){} return; }
+      var ld=document.createElement('div'); ld.id='v46-load';
+      ld.style.cssText='position:fixed;inset:0;background:rgba(6,4,14,.92);z-index:820;display:flex;flex-direction:column;align-items:center;justify-content:center;';
+      ld.innerHTML="<div style='font-size:32px;margin-bottom:12px;'>📄</div><div style='font-size:13px;color:var(--accent,#ff2d95);font-family:var(--mono);letter-spacing:2px;'>LEYENDO REPORTE...</div><div style='font-size:11px;color:var(--t3);margin-top:8px;'>La IA extrae tus valores</div>";
+      document.body.appendChild(ld);
+      try{
+        var dataUrl, mime;
+        if(f.type==='application/pdf' || /\.pdf$/i.test(f.name)){
+          var buf=await f.arrayBuffer();
+          dataUrl=await _pdfToImage(buf); mime='image/jpeg';
+        } else {
+          dataUrl=await new Promise(function(rs,rj){ var r=new FileReader(); r.onload=function(ev){rs(ev.target.result);}; r.onerror=rj; r.readAsDataURL(f); });
+          if(typeof compressImage==='function'){ try{ dataUrl=await compressImage(dataUrl,0.85,1400); }catch(e3){} }
+          mime=(dataUrl.split(';')[0].split(':')[1])||'image/jpeg';
+        }
+        var b64=dataUrl.split(',')[1];
+        var prompt="Esta es una foto/captura/PDF de un reporte de composicion corporal (bascula tipo InBody/Tanita). "
+          +"Extrae SOLO los valores que veas CLARAMENTE; si un valor no aparece ponlo null. NO inventes. "
+          +"Unidades destino: peso kg, grasa %, masa muscular kg, masa magra kg, agua % (si viene en litros calcula % sobre el peso; deja litros en waterL), grasa visceral nivel, IMC, TMB kcal, cintura cm si aparece. "
+          +"Responde SOLO JSON sin markdown: "
+          +'{"weight":N,"bodyFat":N,"muscleMass":N,"leanMass":N,"water":N,"waterL":N,"visceralFat":N,"bmi":N,"bmr":N,"waist":N,"leido":["campos leidos"]}';
+        var text=await _aiCallVisionMulti(prompt, 1000, [{b64:b64,mime:mime}]);
+        if(!text){ return; }
+        var jm=text.match(/\{[\s\S]*\}/); if(!jm) throw new Error('No pude leer el reporte');
+        var v=JSON.parse(jm[0]);
+        _confirmReport(v);
+      }catch(err){
+        console.error('[importReport]',err);
+        var msg=(err&&err.message)||'error';
+        if(/PDF/.test(msg)) notif('PDF no soportado sin conexión','Sube una captura/foto del reporte','&#x26A0;');
+        else notif('No se pudo leer',(msg),'&#x26A0;');
+      } finally { var l=document.getElementById('v46-load'); if(l) l.remove(); }
+    };
+    inp.click();
+  };
+
+  window._confirmReport=function(v){
+    var mc=document.getElementById('mc'), mov=document.getElementById('mov'); if(!mc||!mov) return;
+    var fields=[
+      ['weight','Peso','kg'],['bodyFat','Grasa','%'],['muscleMass','Masa muscular','kg'],['leanMass','Masa magra','kg'],
+      ['water','Agua','%'],['visceralFat','Grasa visceral','nivel'],['bmi','IMC',''],['bmr','TMB','kcal'],['waist','Cintura','cm']
+    ];
+    var rows=fields.filter(function(f){ return v[f[0]]!=null && !isNaN(Number(v[f[0]])); }).map(function(f){
+      return '<label style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;">'
+        +'<span style="display:flex;align-items:center;gap:10px;"><input type="checkbox" checked data-k="'+f[0]+'" style="width:16px;height:16px;accent-color:var(--cyan);"><span style="font-size:13px;color:var(--t2);">'+f[1]+'</span></span>'
+        +'<span style="font-size:15px;font-weight:700;color:var(--t1);">'+v[f[0]]+' <span style="font-size:10px;color:var(--t3);font-weight:400;">'+f[2]+'</span></span></label>';
+    }).join('');
+    mc.style.maxWidth='520px';
+    mc.innerHTML='<div class="mh"><div><div class="mt" style="font-size:16px;">📄 Valores del reporte</div>'
+      +'<div style="font-size:9px;color:var(--t3);font-family:var(--mono);margin-top:3px;">Revisa y aplica a tus métricas</div></div>'
+      +'<div class="mx" onclick="closeModal()">✕</div></div>'
+      +'<div class="mb" style="padding:16px 20px;">'
+      +(rows||'<div style="color:var(--orange);font-size:12px;">No pude leer valores claros. Prueba con una captura más nítida.</div>')
+      +'<div style="font-size:10px;color:var(--t3);margin-top:12px;line-height:1.4;">Se guardan como <b>medidas reales</b> (de tu báscula). Desmarca lo que no quieras aplicar.</div></div>'
+      +'<div class="mf" style="justify-content:flex-end;gap:8px;"><button class="btn bg" onclick="closeModal()">Cancelar</button>'
+      +'<button class="btn-glow" onclick="_applyReport()" style="border-radius:6px;font-size:10px;padding:9px 22px;">✓ Aplicar</button></div>';
+    window.__report=v;
+    mov.classList.add('open');
+  };
+  window._applyReport=function(){
+    var v=window.__report||{};
+    var checks=document.querySelectorAll('#mc input[type=checkbox][data-k]');
+    var applied=0;
+    checks.forEach(function(c){ if(c.checked){ var k=c.getAttribute('data-k'); var val=Number(v[k]); if(!isNaN(val)){ S.metrics[k]=val; applied++; } } });
+    S.metrics._fromReport=true;
+    Store.save();
+    if(typeof renderBodyCol==='function') renderBodyCol();
+    closeModal();
+    notif('Reporte aplicado', applied+' valores en tus métricas','✓');
+  };
+
+  /* botón "Importar reporte" bajo el scan */
+  var _rbc=renderBodyCol;
+  renderBodyCol=function(){
+    _rbc.apply(this,arguments);
+    try{
+      var el=document.getElementById('s-body'); if(!el) return;
+      if(document.getElementById('aib-cuerpo') && !document.getElementById('v46-import')){
+        var d=document.createElement('div'); d.style.cssText='margin-top:8px;';
+        d.innerHTML='<button id="v46-import" onclick="_importReport()" style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);color:var(--t2);border-radius:12px;padding:11px;font-size:12px;font-weight:600;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif;">📄 Importar reporte de báscula (InBody / PDF / foto)</button>';
+        var scanBtn=document.getElementById('aib-cuerpo');
+        scanBtn.parentNode.insertBefore(d, scanBtn.nextSibling);
+      }
+    }catch(e){ console.warn('[v46 btn]',e); }
+  };
+
+  /* versión */
+  try{ APP_VERSION="v46"; APP_BUILD="2026-08-19";
+    var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+  }catch(e){}
+})();
+
 </script>
 
   <button id="ai-chat-btn" onclick="toggleChat()" title="Coach AI">&#x1F4AC;</button>
