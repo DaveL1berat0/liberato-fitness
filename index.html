@@ -7352,6 +7352,193 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
   }catch(e){}
 })();
 
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V49 — 4 AJUSTES DE DAVE
+   (1) Importar reporte de báscula DENTRO de "Ingresar Nuevo Progreso".
+   (2) Scan de grasa: calibrado y realista; NO auto-escribe la estimación
+       en tus métricas reales (se queda como estimación etiquetada).
+   (3) Cambiar de objetivo RESETEA dieta/rutina/planes (hay que regenerar).
+   (4) Generar rutina: elegir DÍAS a entrenar (con recomendación por
+       objetivo); la IA arma exactamente esa cantidad de días.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v49) return; window.__v49=true;
+
+  /* ---- (3) cambiar objetivo resetea el plan ---- */
+  window.setGoalType=function(g){
+    if(!S.user) S.user={};
+    var prev=S.user.goalType;
+    S.user.goalType=g;
+    if(prev && prev!==g){
+      /* nuevo objetivo -> el plan anterior ya no aplica */
+      S.meals=null; S.dietRules=null; S.supplements=null; S.dietPlan=null;
+      S.customDays=null; S.trainPlan=null;
+      ['calories','protein','carbs','fat'].forEach(function(k){ if(S.nutrition[k]) S.nutrition[k].current=0; });
+      S.user.goalConfirmed=false; S.user.aiRec=null;
+      Store.save();
+      try{ var ne=document.getElementById('s-nutrition'); if(ne){ne._r=0;renderNutrition();}
+        var te=document.getElementById('s-training'); if(te){te._r=0;rTrain();} }catch(e){}
+      notif('Objetivo cambiado a '+g,'Regenera tu dieta y rutina para el nuevo objetivo','🔄');
+    } else {
+      Store.save();
+    }
+    renderBrief();
+  };
+
+  /* ---- (4) recomendación de días por objetivo ---- */
+  window._diasRecomendados=function(){
+    var g=((S.user&&S.user.goalType)||'').toLowerCase();
+    if(/definir|marcar|grasa|bajar/.test(g)) return {n:4, txt:'4-5 días (fuerza + algo de cardio) para preservar músculo en déficit'};
+    if(/músculo|musculo|ganar/.test(g)) return {n:4, txt:'4 días te dan volumen suficiente por músculo (2× semana) sin quemarte'};
+    if(/recompos/.test(g)) return {n:4, txt:'4 días equilibran estímulo y recuperación para recomposición'};
+    return {n:4, txt:'4 días es lo más sostenible para la mayoría'};
+  };
+  function _diasSelectorHTML(id){
+    var rec=_diasRecomendados();
+    var opts='';
+    for(var d=2; d<=6; d++){ opts+="<option value='"+d+"'"+(d===rec.n?" selected":"")+">"+d+" días/semana"+(d===rec.n?" (recomendado)":"")+"</option>"; }
+    return "<div style='font-size:10px;color:var(--t3);font-family:var(--mono);letter-spacing:1px;margin:10px 0 6px;text-align:left;'>DÍAS A ENTRENAR</div>"
+      +"<div style='font-size:11px;color:#c9b8ff;text-align:left;margin-bottom:8px;line-height:1.4;'>💡 Para tu objetivo: "+rec.txt+"</div>"
+      +"<select class='v36-sel' id='"+id+"'>"+opts+"</select>";
+  }
+
+  /* redefinir genRoutineAI para EXACTAMENTE N días */
+  window.genRoutineAI=async function(){
+    var sel=document.getElementById('v49-days'); var dias=sel?parseInt(sel.value,10):_diasRecomendados().n;
+    if(!dias||dias<1) dias=_diasRecomendados().n;
+    if(!_AKEY){ notif('Configura tu API key','Toca ⚙ en el Coach AI','🔑'); try{openApiKeySettings();}catch(e){} return; }
+    if(!(S.user&&S.user.goalConfirmed)){ notif('Confirma tu objetivo','Ve a Inicio y confírmalo','⚠'); try{_gotoGoal();}catch(e){} return; }
+    var ld=document.createElement('div'); ld.id='v36-rout-load';
+    ld.style.cssText='position:fixed;inset:0;background:rgba(6,4,14,.92);z-index:800;display:flex;flex-direction:column;align-items:center;justify-content:center;';
+    ld.innerHTML="<div style='font-size:34px;margin-bottom:14px;'>✨</div><div style='font-size:13px;color:var(--accent,#ff2d95);font-family:var(--mono);letter-spacing:2px;'>GENERANDO RUTINA...</div><div style='font-size:11px;color:var(--t3);margin-top:8px;'>"+dias+" días · por evidencia</div>";
+    document.body.appendChild(ld);
+    try{
+      var u=S.user||{}, m=S.metrics||{};
+      var perfil="objetivo "+(u.goalType||'Recomposición')+", meta "+(u.targetWeight||78)+"kg y "+(u.targetBF||10)+"% grasa"+((m.weight>0)?(", peso "+m.weight+"kg, grasa "+(m.bodyFat||'?')+"%"):"");
+      var prompt="Eres entrenador de fuerza basado en evidencia. Perfil: "+perfil+".\n"
+        +"Crea una rutina de EXACTAMENTE "+dias+" DÍAS de entrenamiento por semana (ni más ni menos). Elige el split ÓPTIMO para "+dias+" días y el objetivo "
+        +"(ej: 2=full body, 3=full body o PPL, 4=upper/lower o PPL+1, 5-6=PPL o Arnold). Sesiones 30-45 min.\n"
+        +"Aplica ciencia reciente: rangos variados (fuerza 3-6, hipertrofia 6-12), proximidad al fallo (RIR 0-3, últimas series al fallo en aislamientos), técnicas (drop/rest-pause) cuando aporten.\n"
+        +"Estima cuántas SEMANAS seguir la rutina antes de progresar.\n"
+        +"El array days debe tener EXACTAMENTE "+dias+" elementos. Responde SOLO JSON sin markdown: "
+        +'{"days":[{"nm":"MON","ty":"EMPUJE","cd":"","col":"#8b5cff","ex":[{"nm":"...","cat":"Chest","sets":3,"reps":"6-10","rest":"90s","rpe":8,"metodo":"al fallo|RIR 2|normal"}]}],"metodo":"resumen","semanas":N,"progresion":"como progresar"}';
+      var text=await _aiCall(prompt, 2800);
+      if(!text) return;
+      var jm=text.match(/\{[\s\S]*\}/); if(!jm) throw new Error('La IA no devolvió JSON');
+      var p=JSON.parse(jm[0]);
+      if(!p.days||!p.days.length) throw new Error('La IA no devolvió días');
+      S.customDays=p.days;
+      S.trainPlan={metodo:p.metodo||'', semanas:p.semanas||null, progresion:p.progresion||'', dias:dias, at:new Date().toISOString()};
+      Store.save();
+      var te=document.getElementById('s-training'); if(te){te._r=0;rTrain();}
+      notif('Rutina generada',dias+' días · con métodos y progresión','✨');
+    }catch(e){ console.error('[genRoutineAI v49]',e); notif('Error IA',(e&&e.message)||'No se pudo generar','⚠'); }
+    finally{ var l=document.getElementById('v36-rout-load'); if(l) l.remove(); }
+  };
+
+  /* empty-state y regenerar con selector de días */
+  var _rt=rTrain;
+  rTrain=function(){
+    var el=document.getElementById('s-training');
+    var has=S.customDays&&S.customDays.length;
+    if(el && (S.user&&S.user.goalConfirmed) && !has){
+      el.innerHTML="<div class='card'><div class='cl'>Entrenamiento</div>"
+        +"<div class='v36-empty' style='margin-top:10px;'><h4>Aún no tienes rutina</h4>"
+        +"<p>Elige cuántos días entrenas y la IA arma tu semana según tu objetivo. Podrás editar cada ejercicio.</p>"
+        +_diasSelectorHTML('v49-days')
+        +"<button class='v36-gen' onclick='genRoutineAI()' style='margin-top:10px;'><span>✨</span> Generar rutina con IA</button>"
+        +"</div></div>";
+      el._r=1; return;
+    }
+    _rt.apply(this,arguments);
+    /* reemplazar el "regenerar" para incluir selector de días */
+    if(el && has){
+      var old=document.getElementById('v36-reroute'); if(old) old.remove();
+      if(!document.getElementById('v49-reroute')){
+        var bar=document.createElement('div'); bar.id='v49-reroute'; bar.style.cssText='margin:10px 0 0;';
+        bar.innerHTML="<details style='border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:10px 12px;'>"
+          +"<summary style='cursor:pointer;font-size:12px;color:var(--t2);font-weight:600;'>✨ Regenerar rutina (cambiar días)</summary>"
+          +"<div style='margin-top:10px;'>"+_diasSelectorHTML('v49-days')
+          +"<button class='v36-gen' onclick='genRoutineAI()' style='margin-top:10px;'>Generar nueva rutina</button></div></details>";
+        el.appendChild(bar);
+      }
+    }
+  };
+
+  /* ---- (2) SCAN calibrado, sin auto-escribir en métricas reales ---- */
+  window.aiScanBody=async function(){
+    var btn=document.getElementById('aib-cuerpo'); var res=document.getElementById('scan-result');
+    if(!(S.user&&S.user.goalConfirmed)){ if(typeof _requireGoal==='function') _requireGoal();
+      if(res) res.innerHTML='<div class="v41-gatemsg">🎯 Confirma tu objetivo en <b>Inicio</b> para que la IA analice tus fotos.</div>'; return; }
+    var keys=['p1','p3','p2','p4','main'], imgs=[];
+    keys.forEach(function(k){ if(imgs.length>=3) return; var d=S.photos&&S.photos[k];
+      if(d&&d.indexOf('data:')===0){ imgs.push({b64:d.split(',')[1], mime:(d.split(';')[0].split(':')[1])||'image/jpeg'}); } });
+    if(!imgs.length){ if(res) res.innerHTML='<div style="color:var(--orange);font-size:12px;margin-top:10px;">⚠ Sube al menos una foto (ideal 3: frente, lado, espalda).</div>'; return; }
+    if(btn){ btn.classList.add('loading'); btn.innerHTML='<span class="ai-spin"></span> Analizando '+imgs.length+' foto'+(imgs.length>1?'s':'')+'…'; }
+    var prompt="Eres experto en composicion corporal. Tienes "+imgs.length+" foto(s) del MISMO cuerpo. "
+      +"Estima la GRASA CORPORAL de forma REALISTA y conservadora, SIN asumir que la persona está delgada. "
+      +"Calibración visual: abdominales muy marcados y vascularización ~8-10%; abdominales visibles con poca grasa ~11-14%; "
+      +"abdomen plano con algo de definición ~15-19%; abdomen blando SIN definición visible ~20-25%; barriga notable ~26-32%; muy marcada 33%+. "
+      +"Si ves grasa abdominal o poca/ninguna definición, REFLEJA un porcentaje ALTO acorde. Da un rango amplio y baja confidence si hay duda. "
+      +"Estima tambien musculatura y proporciones SOLO de lo visible. NUNCA des peso kg, agua ni cm.\n"
+      +"Responde SOLO JSON sin markdown: "
+      +'{"bodyFatMin":N,"bodyFatMax":N,"muscularity":"bajo|medio|alto","muscularityPct":N,"vTaperRatio":"texto","symmetry":"balanceada|izquierda|derecha","somatotype":"ectomorfo|mesomorfo|endomorfo|mixto","conditioning":"texto","posture":"texto","regions":{"shoulders":"low|medium|high","chest":"low|medium|high","back":"low|medium|high","arms":"low|medium|high","core":"low|medium|high","legs":"low|medium|high"},"weakPoints":["z1"],"goalGap":"1-2 frases","confidence":"low|medium|high"}';
+    try{
+      var text=await _aiCallVisionMulti(prompt, 1000, imgs);
+      if(text===null){ if(btn){btn.classList.remove('loading');btn.innerHTML='<span>&#x26A1;</span> Escanear con IA';} return; }
+      var jm=text.match(/\{[\s\S]*\}/); if(!jm) throw new Error('La IA no devolvió JSON');
+      var v=JSON.parse(jm[0]); v.at=new Date().toISOString(); v.nFotos=imgs.length;
+      S.scan=v;
+      /* NO auto-escribir bodyFat en métricas: se queda como estimación etiquetada.
+         El valor real de grasa entra por el reporte de báscula (import). */
+      Store.save();
+      if(typeof renderBodyCol==='function') renderBodyCol();
+      if(typeof _v44RenderCoach==='function') _v44RenderCoach(v);
+      var lo=Number(v.bodyFatMin), hi=Number(v.bodyFatMax);
+      var bfTxt=(!isNaN(lo)&&!isNaN(hi)&&!(lo<=0&&hi>=100))?('~'+lo+'-'+hi+'%'):'sin lectura fiable';
+      notif('Análisis por foto','Grasa estimada '+bfTxt+' ('+(v.confidence||'?')+') · es estimación, tu % real usa el reporte de báscula','✨');
+    }catch(e){
+      if(res) res.innerHTML='<div style="color:var(--red);font-size:12px;margin-top:10px;">❌ No se pudo analizar: '+((e&&e.message)||'error')+'.</div>';
+      notif('Scan fallido',(e&&e.message)||'Error','❌'); console.error('[aiScanBody v49]',e);
+    }
+    if(btn){ btn.classList.remove('loading'); btn.innerHTML='<span>&#x26A1;</span> Escanear con IA'; }
+  };
+
+  /* ---- (1) mover Importar reporte a "Ingresar Nuevo Progreso" ---- */
+  /* quitar el botón de importar de la pantalla Cuerpo */
+  var _rbc=renderBodyCol;
+  renderBodyCol=function(){
+    _rbc.apply(this,arguments);
+    try{ var b=document.getElementById('v46-import'); if(b&&b.parentNode) b.parentNode.remove(); }catch(e){}
+  };
+  /* inyectar el botón dentro del modal de progreso (pestaña Cuerpo) */
+  if(typeof openProgress==='function'){
+    var _op=openProgress;
+    openProgress=function(){
+      _op.apply(this,arguments);
+      try{
+        var nt1=document.getElementById('nt1'); if(!nt1||document.getElementById('v49-import')) return;
+        var d=document.createElement('div'); d.style.cssText='margin-bottom:14px;';
+        d.innerHTML='<button id="v49-import" type="button" onclick="_importReport()" style="width:100%;background:linear-gradient(120deg,#8b5cff,#ff2d95,#ff7a1a);color:#fff;border:none;border-radius:12px;padding:12px;font-size:12.5px;font-weight:800;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 8px 20px rgba(255,45,149,.28);">📄 Importar reporte de báscula (InBody / PDF / foto)</button>'
+          +'<div style="font-size:10px;color:var(--t3);text-align:center;margin-top:6px;line-height:1.4;">La IA lee tu reporte y rellena estas métricas sola.</div>';
+        nt1.insertBefore(d, nt1.firstChild);
+      }catch(e){ console.warn('[v49 import in progress]',e); }
+    };
+  }
+
+  /* refrescar métricas tras aplicar reporte también en la pantalla Cuerpo */
+  if(typeof _applyReport==='function'){
+    var _ar=_applyReport;
+    window._applyReport=function(){ _ar.apply(this,arguments); try{ var be=document.getElementById('s-body'); if(be) renderBodyCol(); }catch(e){} };
+  }
+
+  try{ APP_VERSION="v49"; APP_BUILD="2026-08-20";
+    var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+  }catch(e){}
+})();
+
 </script>
 
   <button id="ai-chat-btn" onclick="toggleChat()" title="Coach AI">&#x1F4AC;</button>
