@@ -1398,9 +1398,9 @@ function openApiKeySettings(){
     +"<div class='mx' onclick='closeModal()'>&#x2715;</div></div>"
     +"<div class='mb' style='padding:24px;'>"
     +"<div style='font-size:11px;color:var(--t2);margin-bottom:12px;'>Estado: <b style='color:var(--cyan);'>"+cur+"</b></div>"
-    +"<div style='font-size:10px;color:var(--t3);margin-bottom:14px;'>Key gratis en <span style='color:var(--cyan);'>console.groq.com</span> &middot; o de pago Anthropic / OpenAI</div>"
-    +"<div class='fg'><label class='fl'>API Key (Groq / Anthropic / OpenAI)</label>"
-    +"<input type='password' class='fi' id='_akinp' placeholder='gsk_... &middot; sk-ant-... &middot; sk-...' style='font-family:var(--mono);'></div>"
+    +"<div style='font-size:10px;color:var(--t3);margin-bottom:14px;'>Key GRATIS en <span style='color:var(--cyan);'>console.groq.com</span> (Groq) o <span style='color:var(--cyan);'>aistudio.google.com/apikey</span> (Gemini)</div>"
+    +"<div class='fg'><label class='fl'>API Key (Groq o Gemini)</label>"
+    +"<input type='password' class='fi' id='_akinp' placeholder='gsk_... (Groq)  &middot;  AQ.../AIza... (Gemini)' style='font-family:var(--mono);'></div>"
     +"<div style='font-size:9px;color:var(--t3);margin-top:8px;'>Se guarda en tu dispositivo. Nunca se comparte.</div>"
     +"</div>"
     +"<div class='mf' style='justify-content:space-between;'>"
@@ -3701,8 +3701,8 @@ function setupOnInput(val){
   val=val.trim();
   var pName='';
   if(val.indexOf('gsk_')===0) pName='Groq (qwen3.6-27b)';
+  else if(val.indexOf('AIza')===0||val.indexOf('AQ.')===0) pName='Gemini (Google · gratis)';
   else if(val.indexOf('sk-ant-')===0) pName='Anthropic (Claude)';
-  else if(val.indexOf('sk-')===0) pName='OpenAI (GPT)';
   if(pName){
     btn.disabled=false;
     st.style.color='var(--cyan)';
@@ -3711,7 +3711,7 @@ function setupOnInput(val){
   } else if(val.length>0){
     btn.disabled=true;
     st.style.color='var(--orange)';
-    st.textContent='Soportado: Groq (gsk_), Anthropic (sk-ant-), OpenAI (sk-)';
+    st.textContent='Soportado: Groq (gsk_) y Gemini (AIza / AQ.)';
   } else {
     btn.disabled=true;
     st.textContent='';
@@ -7926,6 +7926,60 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
     +'Explica el PORQUÉ breve cuando ayude a decidir. Viene de tu conocimiento entrenado, no de búsqueda en vivo; si algo es incierto o individual, dilo con honestidad. No es consejo médico.';
 }catch(e){} })();
 
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V55 — FAILOVER EN EL SCAN DE FOTOS + QUITAR OPENAI
+   v54 redefinió _aiCallVisionMulti y perdió el failover en visión. Aquí lo
+   re-envolvemos: si la IA principal falla escaneando (Gemini/Groq), prueba
+   la otra automáticamente. OpenAI se excluye del failover (Dave solo usa
+   Gemini + Groq).
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v55) return; window.__v55=true;
+
+  function _prov(k){ k=k||''; if(k.indexOf('gsk_')===0)return'groq'; if(k.indexOf('AIza')===0||k.indexOf('AQ.')===0)return'gemini'; if(k.indexOf('sk-ant-')===0)return'anthropic'; if(k.indexOf('sk-')===0)return'openai'; return'?'; }
+
+  /* limpiar cualquier key OpenAI guardada (respaldo) para que no se intente */
+  try{ var bk=localStorage.getItem('_ak2')||''; if(_prov(bk)==='openai') localStorage.removeItem('_ak2'); }catch(e){}
+  try{ if(window._preferKey && _prov(window._preferKey)==='openai') window._preferKey=null; }catch(e){}
+
+  function _keys(){
+    var out=[]; try{
+      var k1=(typeof _AKEY!=='undefined'&&_AKEY)||localStorage.getItem('_ak')||'';
+      var k2=localStorage.getItem('_ak2')||'';
+      [k1,k2].forEach(function(k){ if(k && out.indexOf(k)<0 && _prov(k)!=='openai') out.push(k); });
+    }catch(e){}
+    if(window._preferKey && out.indexOf(window._preferKey)>=0){ out.sort(function(a,b){ return a===window._preferKey?-1:(b===window._preferKey?1:0); }); }
+    return out;
+  }
+  function _shouldFail(e){
+    var m=((e&&e.message)||'').toLowerCase();
+    return /quota|billing|insufficient|exceeded|rate.?limit|429|401|403|too large|tokens per minute|tpm|invalid|model|not found|unauthorized|network|failed|http|unavailable|high demand|overload|abort|timeout|tard/.test(m) || m==='';
+  }
+  var _notified=false;
+  function _notif(prov){ if(_notified) return; _notified=true; try{ notif('Scan: cambiando de IA','La principal falló; usando '+(prov==='groq'?'Groq':prov==='gemini'?'Gemini':'la otra'),'🔁'); }catch(e){} setTimeout(function(){_notified=false;},4000); }
+
+  /* re-envolver la visión (v54) con failover */
+  if(typeof _aiCallVisionMulti==='function'){
+    var _origVM=_aiCallVisionMulti;
+    _aiCallVisionMulti=async function(){
+      var ks=_keys(); if(ks.length<=1) return _origVM.apply(this, arguments);
+      var lastErr, args=arguments;
+      for(var i=0;i<ks.length;i++){
+        var prev=_AKEY; _AKEY=ks[i];
+        try{ var r=await _origVM.apply(this, args); window._preferKey=ks[i]; return r; }
+        catch(e){ lastErr=e; if(i<ks.length-1 && _shouldFail(e)){ _notif(_prov(ks[i+1])); continue; } _AKEY=prev; throw e; }
+      }
+      throw lastErr;
+    };
+  }
+
+  try{ APP_VERSION="v55"; APP_BUILD="2026-08-20";
+    var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+  }catch(e){}
+})();
+
 </script>
 
   <button id="ai-chat-btn" onclick="toggleChat()" title="Coach AI">&#x1F4AC;</button>
@@ -7950,10 +8004,10 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
     <div id="setup-title">PROJECT LIBERATO</div>
     <div id="setup-sub">Human Optimization System</div>
     <div id="setup-divider"></div>
-    <div id="setup-desc">Ingresa tu API Key para activar la inteligencia artificial &middot; compatible con Groq, Anthropic y OpenAI</div>
+    <div id="setup-desc">Ingresa tu API Key para activar la inteligencia artificial &middot; compatible con Groq y Gemini (gratis)</div>
     <div id="setup-input-wrap">
       <input type="password" id="setup-key-inp"
-        placeholder="gsk_... &middot; sk-ant-... &middot; sk-..."
+        placeholder="gsk_... (Groq)  &middot;  AQ./AIza... (Gemini)"
         oninput="setupOnInput(this.value)"
         onkeydown="if(event.key==='Enter')setupSave()">
       <div id="setup-eye" onclick="setupToggleEye()">👁</div>
@@ -7972,11 +8026,9 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
       Key gratis en
       <a href="https://console.groq.com/keys" target="_blank"
          style="color:var(--cyan);">console.groq.com</a>
-      &middot; de pago:
-      <a href="https://console.anthropic.com/settings/keys" target="_blank"
-         style="color:var(--t3);">Anthropic</a> /
-      <a href="https://platform.openai.com/api-keys" target="_blank"
-         style="color:var(--t3);">OpenAI</a>
+      &middot; o
+      <a href="https://aistudio.google.com/apikey" target="_blank"
+         style="color:var(--cyan);">aistudio.google.com</a> (Gemini · gratis)
     </div>
   </div>
 </div>
