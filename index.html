@@ -8155,6 +8155,127 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
   }catch(e){}
 })();
 
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V58 — FAILOVER LIMPIO (1 capa) + PANEL DE PROGRESO SIMPLE
+   Reemplaza las 3 capas anidadas (v53/v54/v55) por UNA sola, gemini-aware,
+   para texto y visión. Arregla el scan que no hacía fallback en rate-limit.
+   Y simplifica "Ingresar Progreso": solo tu peso + importar báscula.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v58) return; window.__v58=true;
+  var GEM='gemini-3.6-flash';
+  function _prov(k){ k=k||''; if(k.indexOf('gsk_')===0)return'groq'; if(k.indexOf('AIza')===0||k.indexOf('AQ.')===0)return'gemini'; if(k.indexOf('sk-ant-')===0)return'anthropic'; if(k.indexOf('sk-')===0)return'openai'; return'?'; }
+
+  /* ---- llamada de TEXTO (provider-aware vía _getApiConfig/_buildBody/_parseAiResponse) ---- */
+  async function _textBase(prompt, maxTokens){
+    if(!_AKEY){ notif('Configura tu API key','Toca ⚙ en el Coach AI','🔑'); return null; }
+    var cfg=_getApiConfig();
+    var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+    var to=ctrl?setTimeout(function(){try{ctrl.abort();}catch(e){}},50000):null;
+    try{
+      var res=await fetch(cfg.url,{method:'POST',headers:cfg.headers,body:_buildBody([{role:'user',content:prompt}],maxTokens||200,null),signal:ctrl?ctrl.signal:undefined});
+      if(to)clearTimeout(to);
+      var data=await res.json();
+      if(!res.ok) throw new Error((data.error&&data.error.message)||('HTTP '+res.status));
+      return _parseAiResponse(data)||'';
+    }catch(e){ if(to)clearTimeout(to); if(e&&e.name==='AbortError') throw new Error('La IA tardó demasiado.'); throw e; }
+  }
+
+  /* ---- llamada de VISIÓN multi-imagen (provider-aware) ---- */
+  async function _visionBase(prompt, maxTokens, images){
+    if(!_AKEY){ notif('Configura tu API key','Toca ⚙ en el Coach AI','🔑'); return null; }
+    var p=_getProvider(), cfg=_getApiConfig(), url=cfg.url, headers=cfg.headers, body;
+    if(p==='gemini'){
+      var parts=[{text:prompt}];
+      (images||[]).forEach(function(im){ parts.push({inlineData:{mimeType:im.mime,data:im.b64}}); });
+      body={contents:[{role:'user',parts:parts}], generationConfig:{maxOutputTokens:Math.max((maxTokens||0)+1000,1600)}};
+    } else if(p==='anthropic'){
+      var ac=[]; (images||[]).forEach(function(im){ ac.push({type:'image',source:{type:'base64',media_type:im.mime,data:im.b64}}); }); ac.push({type:'text',text:prompt});
+      body={model:_getVisionModel(),max_tokens:maxTokens||900,messages:[{role:'user',content:ac}]};
+    } else {
+      var content=[{type:'text',text:prompt}];
+      (images||[]).forEach(function(im){ content.push({type:'image_url',image_url:{url:'data:'+im.mime+';base64,'+im.b64}}); });
+      body={model:_getVisionModel(),max_tokens:(p==='groq')?Math.max(maxTokens||0,900):(maxTokens||900),messages:[{role:'user',content:content}]};
+      if(p==='groq') body.reasoning_effort='none';
+    }
+    var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+    var to=ctrl?setTimeout(function(){try{ctrl.abort();}catch(e){}},50000):null;
+    try{
+      var res=await fetch(url,{method:'POST',headers:headers,body:JSON.stringify(body),signal:ctrl?ctrl.signal:undefined});
+      if(to)clearTimeout(to);
+      var data=await res.json();
+      if(!res.ok) throw new Error((data.error&&data.error.message)||('HTTP '+res.status));
+      return _parseAiResponse(data)||'';
+    }catch(e){ if(to)clearTimeout(to); if(e&&e.name==='AbortError') throw new Error('La IA tardó demasiado.'); throw e; }
+  }
+
+  /* ---- keys (ambas, excluye openai, prefiere la que funcionó) ---- */
+  function _keys(){
+    var out=[]; try{
+      var k1=(typeof _AKEY!=='undefined'&&_AKEY)||localStorage.getItem('_ak')||'';
+      var k2=localStorage.getItem('_ak2')||'';
+      [k1,k2].forEach(function(k){ if(k && out.indexOf(k)<0 && _prov(k)!=='openai' && _prov(k)!=='?') out.push(k); });
+    }catch(e){}
+    if(window._preferKey && out.indexOf(window._preferKey)>=0){ out.sort(function(a,b){ return a===window._preferKey?-1:(b===window._preferKey?1:0); }); }
+    return out;
+  }
+  function _shouldFail(e){
+    var m=((e&&e.message)||'').toLowerCase();
+    return /quota|billing|insufficient|exceeded|rate.?limit|429|401|403|too large|tokens per minute|tpm|invalid|model|not found|unauthorized|network|failed|http|unavailable|high demand|overload|abort|timeout|tard|resource/.test(m) || m==='';
+  }
+  var _fnotif=false;
+  function _fn(prov){ if(_fnotif) return; _fnotif=true; try{ notif('Cambiando de IA','La principal falló; usando '+(prov==='groq'?'Groq':prov==='gemini'?'Gemini':'la otra'),'🔁'); }catch(e){} setTimeout(function(){_fnotif=false;},4000); }
+  function _failover(fn){
+    return async function(){
+      var ks=_keys(), args=arguments;
+      if(!ks.length){ return fn.apply(this,args); }
+      var lastErr;
+      for(var i=0;i<ks.length;i++){
+        _AKEY=ks[i];
+        try{ var r=await fn.apply(this,args); window._preferKey=ks[i]; return r; }
+        catch(e){ lastErr=e; if(i<ks.length-1 && _shouldFail(e)){ _fn(_prov(ks[i+1])); continue; } throw e; }
+      }
+      throw lastErr;
+    };
+  }
+
+  /* REEMPLAZAR (supersede v53/v54/v55) */
+  _aiCall = _failover(_textBase);
+  _aiCallVisionMulti = _failover(_visionBase);
+  try{ _aiCallVision = _failover(function(prompt,maxTokens,b64,mime){ return _visionBase(prompt,maxTokens,[{b64:b64,mime:mime}]); }); }catch(e){}
+
+  /* ---- PANEL DE PROGRESO SIMPLE ---- */
+  window.openProgress=function(){
+    var mc=document.getElementById('mc'), mov=document.getElementById('mov'); if(!mc||!mov) return;
+    mc.style.maxWidth='520px';
+    var today=new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'});
+    var n=(S.checkins&&S.checkins.length||0)+1;
+    mc.innerHTML=
+      '<div class="mh"><div><div class="mt" style="font-size:16px;">⚡ Ingresar Progreso</div>'
+      +'<div style="font-size:9px;color:var(--t3);font-family:var(--mono);margin-top:3px;">Check-in #'+n+' · '+today+'</div></div>'
+      +'<div class="mx" onclick="closeModal()">✕</div></div>'
+      +'<div class="mb" style="padding:18px 20px;">'
+      +'<button type="button" onclick="_importReport&&_importReport()" style="width:100%;background:linear-gradient(120deg,#8b5cff,#ff2d95,#ff7a1a);color:#fff;border:none;border-radius:12px;padding:13px;font-size:12.5px;font-weight:800;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 8px 20px rgba(255,45,149,.28);">📄 Importar reporte de báscula (InBody / foto / PDF)</button>'
+      +'<div style="font-size:10.5px;color:var(--t3);text-align:center;margin:6px 0 18px;line-height:1.4;">La IA lee tu reporte y llena grasa, agua, músculo, cintura… solo. O registra manual tu peso abajo.</div>'
+      +'<div class="fg"><label class="fl" style="font-size:12px;">Tu peso de hoy (kg)</label>'
+      +'<input class="fi" id="ci-w" type="number" inputmode="decimal" placeholder="ej: 74.5" value="'+(S.metrics&&S.metrics.weight>0?S.metrics.weight:'')+'" style="font-size:18px;text-align:center;padding:14px;"></div>'
+      +'<div class="fg" style="margin-top:12px;"><label class="fl" style="font-size:12px;">Notas de hoy (opcional)</label>'
+      +'<textarea class="fi" id="ci-notes" placeholder="Cómo te sentiste, cambios que notas…" style="min-height:60px;"></textarea></div>'
+      +'<div style="font-size:10px;color:var(--t3);margin-top:12px;line-height:1.4;">Tu <b>peso</b> es lo único que registras a mano. Cintura, agua, músculo y grasa vienen de tu báscula (arriba) — una foto no puede medir eso.</div>'
+      +'</div>'
+      +'<div class="mf" style="justify-content:space-between;align-items:center;"><div style="font-size:9px;color:var(--t3);font-family:var(--mono);">PROJECT LIBERATO</div>'
+      +'<div style="display:flex;gap:8px;"><button class="btn bg" onclick="closeModal()">Cancelar</button>'
+      +'<button class="btn-glow" onclick="saveCI()" style="border-radius:6px;font-size:10px;padding:10px 22px;">◈ Guardar</button></div></div>';
+    mov.classList.add('open');
+  };
+
+  try{ APP_VERSION="v58"; APP_BUILD="2026-08-20";
+    var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+  }catch(e){}
+})();
+
 </script>
 
   <button id="ai-chat-btn" onclick="toggleChat()" title="Coach AI">&#x1F4AC;</button>
