@@ -1289,10 +1289,22 @@ function rGoals(){
   ${S.goals.map(g=>`<div class="gi"><div class="gico">${g.icon}</div><div class="ginfo"><div class="gn">${g.name}</div><div class="gm">${g.current}${g.unit} → ${g.target}${g.unit}</div><div class="pb" style="margin-top:8px;"><div class="pf pc" style="width:${g.progress}%;background:linear-gradient(90deg,rgba(0,229,255,.3),var(--${g.color==='green'?'green':g.color==='blue'?'blue':g.color==='purple'?'purple':'cyan'}));"></div></div></div><div style="text-align:right;flex-shrink:0;"><div style="font-size:20px;font-weight:700;color:var(--cyan);font-family:var(--mono);">${g.progress}%</div><div style="font-size:9px;color:var(--t3);font-family:var(--mono);">${({HIGH:'ALTA',MED:'MEDIA',LOW:'BAJA'}[g.priority]||g.priority)}</div></div></div>`).join('')}
 </div>
 <div class="card">
-  <div class="cl">Simulador de Objetivos</div>
-  <div style="font-size:12px;color:var(--t3);margin-bottom:16px;">Ajusta las variables para simular la proyección</div>
-  ${[['Calorías diarias','sc',1800,3500,2500,'kcal'],['Proteína','sp',100,220,155,'g'],['Días de entreno/sem','sv',1,7,5,'días']].map(([lb,id,mn,mx,v,u])=>`<div style="margin-bottom:14px;"><div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="font-size:11px;color:var(--t2);">${lb}</span><span style="font-size:11px;color:var(--cyan);font-family:var(--mono);" id="${id}-v">${v} ${u}</span></div><input type="range" min="${mn}" max="${mx}" value="${v}" style="width:100%;accent-color:var(--cyan);cursor:pointer;" oninput="document.getElementById('${id}-v').textContent=this.value+' ${u}';"></div>`).join('')}
-  <div class="air"><div class="ait" id="brief-proj-txt">${(S.checkins&&S.checkins.length)?'Proyecci\u00f3n disponible con m\u00e1s check-ins. Pregunta al Coach AI por tu tendencia real.':'Registra tu peso y medidas reales para ver proyecciones. Aqu\u00ed no se inventan fechas ni cifras (Regla #1).'}</div></div>
+  <div class="cl">Objetivos recomendados por la IA</div>
+  <div style="font-size:12px;color:var(--t3);margin-bottom:14px;">Ajustados a tu meta: <b style="color:#c9b8ff;">${(S.user&&S.user.goalType)||'define tu objetivo'}</b> — no los ajustas tú; los calcula la IA según tu objetivo.</div>
+  ${(function(){
+    var n=S.nutrition, dias=(S.customDays||[]).filter(function(d){return (d.ex||[]).length;}).length;
+    var tieneDieta=!!(S.meals&&['breakfast','lunch','dinner','snacks'].some(function(k){return (S.meals[k]||[]).length;}));
+    var tieneRutina=dias>0;
+    if(!tieneDieta && !tieneRutina){
+      return '<div style="text-align:center;padding:16px 8px;color:var(--t3);font-size:12px;line-height:1.5;">Confirma tu objetivo en Inicio y genera tu <b>dieta</b> y <b>rutina</b>. Aqu\u00ed aparecer\u00e1n tus calor\u00edas, prote\u00edna y d\u00edas de entreno <b>recomendados por la IA</b> seg\u00fan tu meta.</div>';
+    }
+    function r(lb,val,u){return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05);"><span style="font-size:12px;color:var(--t2);">'+lb+'</span><span style="font-size:16px;font-weight:800;color:var(--t1);">'+val+' <span style="font-size:10px;color:var(--t3);font-weight:400;">'+u+'</span></span></div>';}
+    var H='';
+    if(tieneDieta){ H+=r('Calor\u00edas diarias',n.calories.target,'kcal')+r('Prote\u00edna',n.protein.target,'g')+r('Carbohidratos',n.carbs.target,'g')+r('Grasa',n.fat.target,'g'); }
+    if(tieneRutina){ H+=r('D\u00edas de entreno',dias,'d\u00edas/sem'); }
+    H+='<div style="font-size:10px;color:var(--t3);margin-top:10px;line-height:1.4;">Salen de tu dieta y rutina generadas. Para cambiarlos, cambia tu objetivo y reg\u00e9nera — no muevas n\u00fameros a mano (alterar\u00eda el resultado).</div>';
+    return H;
+  })()}
 </div>`;
 }
 function showAddGoal(){
@@ -6553,6 +6565,212 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
   try{ APP_VERSION="v43"; APP_BUILD="2026-08-19";
     var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
   }catch(e){}
+})();
+
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V44 — MÉTRICAS CLAVE DESDE LA FOTO (todo lo estimable, nada inventado)
+   Dave: el scan debe rellenar en Métricas Clave TODO lo que una foto puede
+   medir (no solo grasa). Lo que la foto no puede medir NO aparece en el
+   bloque de foto. Verificado en vivo: qwen estima grasa%, musculatura,
+   proporción V, simetría, somatotipo, definición y postura, y reporta lo
+   que realmente pudo evaluar. Peso/cm/agua siguen siendo medida manual.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v44) return; window.__v44=true;
+
+  /* persistir S.scan en pf1x */
+  try{ var x=JSON.parse(localStorage.getItem('pf1x')||'null'); if(x&&x.scan) S.scan=x.scan; }catch(e){}
+  (function(){ var _s=Store.save; Store.save=function(){ var r=_s.apply(this,arguments);
+    try{ var c=JSON.parse(localStorage.getItem('pf1x')||'{}'); c.scan=S.scan||null; localStorage.setItem('pf1x',JSON.stringify(c)); }catch(e){} return r; }; })();
+
+  function cap(s){ s=String(s||''); return s.charAt(0).toUpperCase()+s.slice(1); }
+  function ok(v){ return v!=null && String(v).trim() && !/no disponible|no se puede|^n\/?a$|desconocid/i.test(String(v).trim()); }
+
+  /* ---- SCAN AMPLIADO: guarda S.scan con todo lo estimable ---- */
+  aiScanBody=async function(){
+    var btn=document.getElementById('aib-cuerpo');
+    var res=document.getElementById('scan-result');
+    if(!(S.user&&S.user.goalConfirmed)){
+      if(typeof _requireGoal==='function') _requireGoal();
+      if(res) res.innerHTML='<div class="v41-gatemsg">\u{1F3AF} Confirma tu objetivo en <b>Inicio</b> para que la IA analice tus fotos según tu meta.</div>';
+      return;
+    }
+    var keys=['p1','p3','p2','p4','main'], labels={main:'principal',p1:'frente',p2:'lado izq',p3:'espalda',p4:'lado der'};
+    var imgs=[];
+    keys.forEach(function(k){ if(imgs.length>=3) return; var d=S.photos&&S.photos[k];
+      if(d&&d.indexOf('data:')===0){ imgs.push({b64:d.split(',')[1], mime:(d.split(';')[0].split(':')[1])||'image/jpeg'}); } });
+    if(!imgs.length){ if(res) res.innerHTML='<div style="color:var(--orange);font-size:12px;margin-top:10px;">⚠ Sube al menos una foto (ideal 3: frente, lado, espalda) en el Escáner.</div>'; return; }
+    if(btn){ btn.classList.add('loading'); btn.innerHTML='<span class="ai-spin"></span> Analizando '+imgs.length+' foto'+(imgs.length>1?'s':'')+'…'; }
+    var prompt="Eres experto en composicion corporal. Tienes "+imgs.length+" foto(s) del MISMO cuerpo (Dave, objetivo "+(S.user.targetWeight||78)+"kg/"+(S.user.targetBF||10)+"%). "
+      +"Estima SOLO lo VISUALMENTE observable. Se conservador y honesto: lo que la foto no permita, ponlo como \"no disponible\" y baja confidence. "
+      +"NUNCA des peso en kg, % de agua ni circunferencias exactas (no salen de una foto). "
+      +"Responde SOLO JSON sin markdown: "
+      +'{"bodyFatMin":N,"bodyFatMax":N,'
+      +'"muscularity":"bajo|medio|alto","muscularityPct":N,'
+      +'"vTaperRatio":"texto corto (ej: 1.4, marcado, moderado, poco)",'
+      +'"symmetry":"balanceada|izquierda|derecha","somatotype":"ectomorfo|mesomorfo|endomorfo|mixto",'
+      +'"conditioning":"texto corto (definicion/dureza)","posture":"texto corto",'
+      +'"regions":{"shoulders":"low|medium|high","chest":"low|medium|high","back":"low|medium|high","arms":"low|medium|high","core":"low|medium|high","legs":"low|medium|high"},'
+      +'"weakPoints":["z1","z2"],"goalGap":"1-2 frases: que falta para tu meta y en que enfocar",'
+      +'"confidence":"low|medium|high","warning":"texto o vacio"}';
+    try{
+      var text=await _aiCallVisionMulti(prompt, 1000, imgs);
+      if(text===null){ if(btn){btn.classList.remove('loading');btn.innerHTML='<span>&#x26A1;</span> Escanear con IA';} return; }
+      var jm=text.match(/\{[\s\S]*\}/); if(!jm) throw new Error('La IA no devolvió JSON');
+      var v=JSON.parse(jm[0]);
+      v.at=new Date().toISOString(); v.nFotos=imgs.length;
+      S.scan=v;
+      /* grasa a métricas si hay lectura y confianza suficiente */
+      var lo=Number(v.bodyFatMin), hi=Number(v.bodyFatMax);
+      var haveBF=!isNaN(lo)&&!isNaN(hi)&&!(lo<=0&&hi>=100);
+      var conf=(v.confidence||'low').toLowerCase();
+      if(haveBF && (conf==='medium'||conf==='high')){ S.metrics.bodyFat=Math.round(((lo+hi)/2)*10)/10; S.metrics._bfFromScan=true; }
+      Store.save();
+      if(typeof renderBodyCol==='function') renderBodyCol();
+      /* coaching en scan-result (zonas, débiles, objetivo) */
+      _v44RenderCoach(v);
+      var msg=haveBF?('Grasa ~'+lo+'-'+hi+'% · '+conf):(conf+' confianza');
+      notif('Análisis por foto listo', msg+' · '+imgs.length+' fotos','✨');
+    }catch(e){
+      if(res) res.innerHTML='<div style="color:var(--red);font-size:12px;margin-top:10px;">❌ No se pudo analizar: '+((e&&e.message)||'error')+'. Prueba con mejor luz, cuerpo completo y fondo liso.</div>';
+      notif('Scan fallido',(e&&e.message)||'Error al analizar','❌');
+      console.error('[aiScanBody v44]',e);
+    }
+    if(btn){ btn.classList.remove('loading'); btn.innerHTML='<span>&#x26A1;</span> Escanear con IA'; }
+  };
+
+  function _lvlColor(v){ v=(v||'').toLowerCase(); return (v==='alto'||v==='high')?'#33e08a':(v==='medio'||v==='medium')?'#ffa64d':'#8ab4ff'; }
+
+  window._v44RenderCoach=function(v){
+    var res=document.getElementById('scan-result'); if(!res||!v) return;
+    var reg=v.regions||{};
+    function bar(lb,val){ var l=(val||'').toLowerCase(); var c=(l==='high')?'#33e08a':(l==='medium')?'#ffa64d':'#ff6b81'; var p=(l==='high')?100:(l==='medium')?60:28; var t=(l==='high')?'Alta':(l==='medium')?'Media':'Baja';
+      return '<div style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;"><span style="color:var(--t2);">'+lb+'</span><span style="color:'+c+';font-weight:700;">'+t+'</span></div><div style="height:6px;border-radius:3px;background:rgba(255,255,255,.06);"><div style="height:100%;width:'+p+'%;background:'+c+';border-radius:3px;"></div></div></div>'; }
+    var H=['<div style="margin-top:14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:16px;">'];
+    H.push('<div style="font-size:10px;color:var(--t3);font-family:var(--mono);letter-spacing:1px;margin-bottom:10px;">DESARROLLO POR ZONA (VISUAL)</div>');
+    H.push(bar('Hombros',reg.shoulders)+bar('Pecho',reg.chest)+bar('Espalda',reg.back)+bar('Brazos',reg.arms)+bar('Core',reg.core)+bar('Piernas',reg.legs));
+    if(v.weakPoints&&v.weakPoints.length) H.push('<div style="font-size:11.5px;color:var(--t2);margin-top:6px;"><b>A priorizar:</b> '+v.weakPoints.join(', ')+'</div>');
+    if(ok(v.goalGap)) H.push('<div style="font-size:11.5px;color:var(--t2);line-height:1.5;margin-top:8px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06);">'+String(v.goalGap).replace(/</g,'&lt;')+'</div>');
+    H.push('</div>');
+    res.innerHTML=H.join('');
+  };
+
+  /* ---- MÉTRICAS CLAVE = 2 bloques honestos ---- */
+  function row(lb,val,unit,tag){
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.04);">'
+      +'<span style="font-size:11px;color:var(--t3);font-family:var(--mono);letter-spacing:.5px;">'+lb+(tag?(' <span style="font-size:7px;background:rgba(139,92,255,.25);color:#c9b8ff;padding:1px 5px;border-radius:6px;">IA</span>'):'')+'</span>'
+      +'<span style="font-size:14px;font-weight:700;color:'+(val==='—'?'var(--t3)':'var(--t1)')+';">'+val+(val!=='—'&&unit?(' <span style="font-size:9px;color:var(--t2);font-weight:400;">'+unit+'</span>'):'')+'</span></div>';
+  }
+  window._v44MetricsHTML=function(){
+    var sc=S.scan, m=S.metrics||{}, u=S.user||{};
+    /* Bloque foto (IA) — solo lo estimable con valor real */
+    var pr=[];
+    if(sc){
+      if(sc.bodyFatMin!=null&&sc.bodyFatMax!=null&&!(sc.bodyFatMin<=0&&sc.bodyFatMax>=100)) pr.push(row('Grasa corporal','~'+sc.bodyFatMin+'–'+sc.bodyFatMax+'%','',true));
+      if(ok(sc.muscularity)) pr.push(row('Musculatura',cap(sc.muscularity)+(sc.muscularityPct?(' ('+sc.muscularityPct+'%)'):''),'',true));
+      if(ok(sc.vTaperRatio)) pr.push(row('Proporción V','hombro:cintura '+sc.vTaperRatio,'',true));
+      if(ok(sc.symmetry)) pr.push(row('Simetría',cap(sc.symmetry),'',true));
+      if(ok(sc.somatotype)) pr.push(row('Somatotipo',cap(sc.somatotype),'',true));
+      if(ok(sc.conditioning)) pr.push(row('Definición',cap(sc.conditioning),'',true));
+      if(ok(sc.posture)) pr.push(row('Postura',cap(sc.posture),'',true));
+    }
+    var conf=sc?(sc.confidence||'low'):null;
+    var confC=conf==='high'?'#33e08a':conf==='medium'?'#ffa64d':'#ff6b81';
+    var photoCard='<div class="card" style="margin-bottom:12px;">'
+      +'<div class="cl">Estimado por foto (IA)</div>'
+      +(pr.length?('<div style="margin-top:4px;">'+pr.join('')+'</div>'
+        +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t3);margin-top:10px;">'
+        +'<span>Confianza: <b style="color:'+confC+';">'+conf+'</b> · '+(sc.nFotos||1)+' foto'+((sc.nFotos||1)>1?'s':'')+'</span>'
+        +'<span>'+(_fmtFecha&&_fmtFecha(sc.at)||'')+'</span></div>'
+        +'<div style="font-size:10px;color:var(--t3);margin-top:6px;line-height:1.4;">Estimación visual, no medición. Vuelve a escanear tras cambios.</div>')
+       :('<div style="text-align:center;padding:16px 8px;color:var(--t3);font-size:12px;line-height:1.5;">Sube tus fotos y toca <b>Escanear con IA</b>. La IA estimará aquí tu grasa, musculatura, proporción, simetría, somatotipo, definición y postura — solo lo que una foto permite ver.</div>'))
+      +'</div>';
+    /* Bloque medidas manuales — lo que una foto NO puede medir */
+    var imc=(m.weight>0&&u.height)?(m.weight/Math.pow(u.height/100,2)).toFixed(1):null;
+    var man=[
+      row('Peso',m.weight>0?m.weight:'—','kg'),
+      row('Cintura',m.waist>0?m.waist:'—','cm'),
+      row('Hombros',m.shoulders>0?m.shoulders:'—','cm'),
+      row('% Agua',m.water>0?m.water:'—','%'),
+      row('IMC',imc||'—','')
+    ];
+    var manCard='<div class="card"><div class="cl">Medidas por ti (báscula / cinta)</div>'
+      +'<div style="margin-top:4px;">'+man.join('')+'</div>'
+      +'<div style="font-size:10px;color:var(--t3);margin-top:10px;line-height:1.4;">Regístralas en <span style="color:var(--cyan);cursor:pointer;text-decoration:underline;" onclick="openProgress&&openProgress()">Ingresar Progreso</span>. Una foto no puede medir esto.</div></div>';
+    return photoCard+manCard;
+  };
+
+  /* reemplazar el bloque .bmet-card-col tras renderBodyCol */
+  var _rbc=renderBodyCol;
+  renderBodyCol=function(){
+    _rbc.apply(this,arguments);
+    try{
+      var box=document.querySelector('#s-body .bmet-card-col');
+      if(box) box.innerHTML=_v44MetricsHTML();
+    }catch(e){ console.warn('[v44 metrics]',e); }
+  };
+
+  /* versión */
+  try{ APP_VERSION="v44"; APP_BUILD="2026-08-19";
+    var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+  }catch(e){}
+})();
+
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V44b — QUITAR FOTO + ACLARAR QUE LA IA ANALIZA TODAS JUNTAS
+   Dave: botón para remover cada foto; el scan analiza TODAS las fotos
+   subidas (cualquier ángulo), no una por slot. La lógica del scan ya
+   toma todas las disponibles; aquí sumamos el botón X y una nota.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v44b) return; window.__v44b=true;
+
+  window._removePhoto=function(key,ev){
+    if(ev){ try{ev.stopPropagation();ev.preventDefault();}catch(e){} }
+    if(!S.photos) return;
+    S.photos[key]=null;
+    try{ if(typeof idbSavePhoto==='function') idbSavePhoto(key,null); }catch(e){}
+    Store.save();
+    if(typeof renderBodyCol==='function') renderBodyCol();
+    if(typeof notif==='function') notif('Foto quitada', key==='main'?'principal':key, '🗑');
+  };
+
+  function addX(container,key){
+    if(!container || container.querySelector('.v44-rmx')) return;
+    if(getComputedStyle(container).position==='static') container.style.position='relative';
+    var b=document.createElement('button'); b.className='v44-rmx'; b.type='button';
+    b.innerHTML='✕'; b.title='Quitar foto';
+    b.style.cssText='position:absolute;top:6px;right:6px;z-index:6;width:26px;height:26px;border-radius:50%;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.62);color:#fff;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);';
+    b.onclick=function(e){ e.stopPropagation(); _removePhoto(key,e); };
+    container.appendChild(b);
+  }
+
+  var _rbc=renderBodyCol;
+  renderBodyCol=function(){
+    _rbc.apply(this,arguments);
+    try{
+      var body=document.getElementById('s-body'); if(!body) return;
+      /* foto principal */
+      if(S.photos && S.photos.main){ addX(document.getElementById('bscan-el'),'main'); }
+      /* slots p1..p4 */
+      body.querySelectorAll('.v4ph').forEach(function(slot){
+        var key=slot.getAttribute('data-key');
+        if(S.photos && S.photos[key]) addX(slot,key);
+      });
+      /* nota: la IA analiza todas juntas */
+      var pg=body.querySelector('.pg');
+      if(pg && !document.getElementById('v44-photonote')){
+        var n=document.createElement('div'); n.id='v44-photonote';
+        n.style.cssText='font-size:10px;color:var(--t3);text-align:center;margin-top:8px;line-height:1.4;';
+        n.innerHTML='Sube los ángulos que puedas (frente, espalda, lados, abdomen). La IA <b>analiza todas tus fotos juntas</b> — no importa en qué recuadro las pongas.';
+        pg.parentNode.insertBefore(n, pg.nextSibling);
+      }
+    }catch(e){ console.warn('[v44b]',e); }
+  };
 })();
 
 </script>
