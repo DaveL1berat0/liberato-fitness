@@ -7744,6 +7744,80 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
   }catch(e){}
 })();
 
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V53 — FAILOVER ENTRE IAs (si una falla, usa la otra)
+   Guarda 2 keys (primaria + respaldo de OTRO proveedor). Las llamadas de
+   IA prueban una y, si falla (sin créditos, límite, error), reintentan con
+   la otra automáticamente. Recuerda cuál funcionó en la sesión para no
+   duplicar latencia. Ej: OpenAI sin saldo → cae a Groq solo.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v53) return; window.__v53=true;
+
+  function _provOf(k){ k=k||''; if(k.indexOf('gsk_')===0)return'groq'; if(k.indexOf('sk-ant-')===0)return'anthropic'; if(k.indexOf('sk-')===0)return'openai'; return'?'; }
+
+  /* al fijar una key nueva, conservar la anterior (de OTRO proveedor) como respaldo */
+  if(typeof _setApiKey==='function'){
+    var _origSet=_setApiKey;
+    window._setApiKey=function(k){
+      k=(k||'').trim();
+      try{
+        var old=localStorage.getItem('_ak')||'';
+        if(old && k && old!==k && _provOf(old)!==_provOf(k) && _provOf(old)!=='?'){ localStorage.setItem('_ak2', old); }
+        /* si la key nueva coincide con el respaldo, limpiar respaldo duplicado */
+        var bk=localStorage.getItem('_ak2')||''; if(bk===k) localStorage.removeItem('_ak2');
+      }catch(e){}
+      _origSet(k);
+    };
+  }
+
+  function _keys(){
+    var out=[]; try{ var k1=(typeof _AKEY!=='undefined'&&_AKEY)||localStorage.getItem('_ak')||''; if(k1)out.push(k1);
+      var k2=localStorage.getItem('_ak2')||''; if(k2&&k2!==k1)out.push(k2); }catch(e){}
+    /* preferir la que funcionó en la sesión */
+    if(window._preferKey){ out.sort(function(a,b){ return a===window._preferKey?-1:(b===window._preferKey?1:0); }); }
+    return out;
+  }
+  function _shouldFailover(e){
+    var m=((e&&e.message)||'').toLowerCase();
+    return /quota|billing|insufficient|exceeded|rate.?limit|429|401|403|too large|tokens per minute|tpm|invalid|model|not found|unauthorized|network|failed|http/.test(m) || m==='';
+  }
+  var _notified=false;
+  function _failNotif(prov){ if(_notified) return; _notified=true; try{ notif('IA de respaldo','La IA principal falló; usando '+(prov==='groq'?'Groq':prov==='openai'?'OpenAI':'la otra IA'),'🔁'); }catch(e){} setTimeout(function(){_notified=false;},4000); }
+
+  /* envolver una función que depende de _AKEY con failover multi-key */
+  function withFailover(orig){
+    return async function(){
+      var ks=_keys();
+      if(ks.length<=1){ return orig.apply(this, arguments); }
+      var lastErr;
+      for(var i=0;i<ks.length;i++){
+        var prev=_AKEY; _AKEY=ks[i];
+        try{
+          var r=await orig.apply(this, arguments);
+          window._preferKey=ks[i];   /* recordar la que funcionó */
+          return r;
+        }catch(e){
+          lastErr=e;
+          if(i<ks.length-1 && _shouldFailover(e)){ _failNotif(_provOf(ks[i+1])); continue; }
+          _AKEY=prev; throw e;
+        }
+      }
+      throw lastErr;
+    };
+  }
+
+  try{ if(typeof _aiCall==='function') _aiCall=withFailover(_aiCall); }catch(e){}
+  try{ if(typeof _aiCallVisionMulti==='function') _aiCallVisionMulti=withFailover(_aiCallVisionMulti); }catch(e){}
+  try{ if(typeof _aiCallVision==='function') _aiCallVision=withFailover(_aiCallVision); }catch(e){}
+
+  try{ APP_VERSION="v53"; APP_BUILD="2026-08-20";
+    var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+  }catch(e){}
+})();
+
 </script>
 
   <button id="ai-chat-btn" onclick="toggleChat()" title="Coach AI">&#x1F4AC;</button>
