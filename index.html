@@ -8403,6 +8403,45 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
   }catch(e){}
 })();
 
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V60 — CAMPO DE ALTURA (el IMC dependía de una altura fija 178)
+   El IMC es real (peso÷altura²) pero la altura estaba clavada en 178 sin
+   forma de cambiarla. Se agrega el campo de altura en Ingresar Progreso
+   (se guarda una vez, persiste) para que el IMC sea correcto para Dave.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v60) return; window.__v60=true;
+
+  var _op=window.openProgress;
+  window.openProgress=function(){
+    _op.apply(this,arguments);
+    try{
+      var w=document.getElementById('ci-w'); if(!w) return;
+      var fg=w.closest('.fg'); if(!fg || document.getElementById('ci-height')) return;
+      var d=document.createElement('div'); d.className='fg'; d.style.marginTop='12px';
+      var h=(S.user&&S.user.height)||178;
+      d.innerHTML='<label class="fl" style="font-size:12px;">Tu altura (cm) <span style="color:var(--t3);font-weight:400;">— una vez</span></label>'
+        +'<input class="fi" id="ci-height" type="number" inputmode="numeric" placeholder="ej: 178" value="'+h+'" style="font-size:16px;text-align:center;padding:12px;">';
+      fg.parentNode.insertBefore(d, fg.nextSibling);
+    }catch(e){}
+  };
+
+  /* guardar altura al guardar progreso, antes de recalcular */
+  if(typeof saveCI==='function'){
+    var _save=saveCI;
+    window.saveCI=function(){
+      try{ var hv=parseFloat((document.getElementById('ci-height')||{}).value); if(hv>0){ if(!S.user)S.user={}; S.user.height=hv; } }catch(e){}
+      return _save.apply(this,arguments);
+    };
+  }
+
+  try{ APP_VERSION="v60"; APP_BUILD="2026-08-20";
+    var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+  }catch(e){}
+})();
+
 </script>
 
   <button id="ai-chat-btn" onclick="toggleChat()" title="Coach AI">&#x1F4AC;</button>
