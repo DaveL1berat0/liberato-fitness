@@ -5290,7 +5290,7 @@ async function genRoutineAI(protocol){
     }
     var H=[];
     /* Macros */
-    H.push("<div class='card' style='margin-bottom:14px;'><div class='cl'>Plan del día (objetivo)</div>"
+    H.push("<div class='card' style='margin-bottom:14px;'><div class='cl'>Macros objetivo del día</div>"
       +"<div style='display:flex;justify-content:space-around;flex-wrap:wrap;gap:12px;padding:8px 0 4px;'>"
       +ring('CALORÍAS',n.calories.current,n.calories.target,'#ff7a1a','')
       +ring('PROTEÍNA',n.protein.current,n.protein.target,'#ff2d95','g')
@@ -8054,6 +8054,105 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
     try{ _AKEY=k; }catch(e){}
     try{ k?localStorage.setItem('_ak',k):(localStorage.removeItem('_ak'),localStorage.removeItem('_ak_ok')); }catch(e){}
   };
+})();
+
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V57 — PULIDO: métricas alineadas · medidas por báscula · sin diario ·
+   macros · gráfica de tendencia por objetivo
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v57) return; window.__v57=true;
+  function cap(s){ s=String(s||''); return s.charAt(0).toUpperCase()+s.slice(1); }
+  function ok(v){ return v!=null && String(v).trim() && !/no disponible|no se puede|^n\/?a$|desconocid/i.test(String(v).trim()); }
+  function hasPhotos(){ return !!(S.photos && ['main','p1','p2','p3','p4'].some(function(k){ return S.photos[k]; })); }
+
+  /* (1) métricas: bloque foto en lista APILADA uniforme; medidas inline */
+  window._v44MetricsHTML=function(){
+    var sc=hasPhotos()?S.scan:null, m=S.metrics||{}, u=S.user||{};
+    function prow(lb,val){
+      return '<div style="padding:11px 0;border-bottom:1px solid rgba(255,255,255,.05);">'
+        +'<div style="font-size:10px;color:var(--t3);font-family:var(--mono);letter-spacing:1.5px;margin-bottom:5px;">'+lb.toUpperCase()+' <span style="font-size:7px;background:rgba(139,92,255,.25);color:#c9b8ff;padding:1px 5px;border-radius:6px;letter-spacing:.5px;">IA</span></div>'
+        +'<div style="font-size:15px;font-weight:700;color:var(--t1);line-height:1.4;">'+val+'</div></div>';
+    }
+    function mrow(lb,val,unit){
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.05);">'
+        +'<span style="font-size:11px;color:var(--t3);font-family:var(--mono);letter-spacing:.5px;">'+lb+'</span>'
+        +'<span style="font-size:15px;font-weight:700;color:'+(val==='—'?'var(--t3)':'var(--t1)')+';">'+val+(val!=='—'&&unit?(' <span style="font-size:9px;color:var(--t2);font-weight:400;">'+unit+'</span>'):'')+'</span></div>';
+    }
+    var pr=[];
+    if(sc){
+      if(sc.bodyFatMin!=null&&sc.bodyFatMax!=null&&!(sc.bodyFatMin<=0&&sc.bodyFatMax>=100)) pr.push(prow('Grasa corporal','~'+sc.bodyFatMin+'–'+sc.bodyFatMax+'%'));
+      if(ok(sc.muscularity)) pr.push(prow('Musculatura',cap(sc.muscularity)+(sc.muscularityPct?(' ('+sc.muscularityPct+'%)'):'')));
+      if(ok(sc.vTaperRatio)) pr.push(prow('Proporción V (hombro:cintura)',cap(sc.vTaperRatio)));
+      if(ok(sc.symmetry)) pr.push(prow('Simetría',cap(sc.symmetry)));
+      if(ok(sc.somatotype)) pr.push(prow('Somatotipo',cap(sc.somatotype)));
+      if(ok(sc.conditioning)) pr.push(prow('Definición',cap(sc.conditioning)));
+      if(ok(sc.posture)) pr.push(prow('Postura',cap(sc.posture)));
+    }
+    var conf=sc?(sc.confidence||'low'):null;
+    var confC=conf==='high'?'#33e08a':conf==='medium'?'#ffa64d':'#ff6b81';
+    var photoCard='<div class="card" style="margin-bottom:12px;"><div class="cl">Estimado por foto (IA)</div>'
+      +(pr.length?('<div style="margin-top:6px;">'+pr.join('')+'</div>'
+        +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--t3);margin-top:12px;">'
+        +'<span>Confianza: <b style="color:'+confC+';">'+conf+'</b> · '+(sc.nFotos||1)+' foto'+((sc.nFotos||1)>1?'s':'')+'</span>'
+        +'<span>'+((typeof _fmtFecha==='function'&&_fmtFecha(sc.at))||'')+'</span></div>'
+        +'<div style="font-size:10px;color:var(--t3);margin-top:6px;line-height:1.4;">Estimación visual, no medición. Vuelve a escanear tras cambios.</div>')
+       :('<div style="text-align:center;padding:16px 8px;color:var(--t3);font-size:12px;line-height:1.5;">Sube tus fotos y toca <b>Escanear con IA</b>. La IA estimará aquí tu grasa, musculatura, proporción, simetría, somatotipo, definición y postura.</div>'))
+      +'</div>';
+    /* (2) medidas: vienen de la báscula/InBody (import), no de escribir a mano */
+    var imc=(m.weight>0&&u.height)?(m.weight/Math.pow(u.height/100,2)).toFixed(1):null;
+    var man=[ mrow('Peso',m.weight>0?m.weight:'—','kg'), mrow('Cintura',m.waist>0?m.waist:'—','cm'),
+      mrow('Hombros',m.shoulders>0?m.shoulders:'—','cm'), mrow('% Agua',m.water>0?m.water:'—','%'),
+      mrow('Masa muscular',m.muscleMass>0?m.muscleMass:'—','kg'), mrow('IMC',imc||'—','') ];
+    var manCard='<div class="card"><div class="cl">Medidas (báscula / InBody)</div>'
+      +'<div style="margin-top:6px;">'+man.join('')+'</div>'
+      +'<div style="font-size:10.5px;color:var(--t3);margin-top:12px;line-height:1.5;">Tú solo registras tu <b>peso</b> en <span style="color:var(--cyan);cursor:pointer;text-decoration:underline;" onclick="openProgress&&openProgress()">Ingresar Progreso</span>. El resto (cintura, agua, músculo…) se llena solo al <b>importar tu reporte de báscula/InBody</b> ahí mismo. Una foto no puede medir esto.</div></div>';
+    return photoCard+manCard;
+  };
+  try{ if(typeof renderBodyCol==='function' && document.getElementById('s-body')) renderBodyCol(); }catch(e){}
+
+  /* (4) quitar "Diario de hoy" de la dieta */
+  if(typeof renderNutrition==='function'){
+    var _rn=renderNutrition;
+    renderNutrition=function(){
+      _rn.apply(this,arguments);
+      try{ var add=document.getElementById('v47-add'); if(add){ var card=add.closest('.card'); if(card) card.remove(); } }catch(e){}
+    };
+  }
+
+  /* (6) timeline: veredicto de tendencia coloreado por objetivo (desde 2 check-ins) */
+  if(typeof rTimeline==='function'){
+    var _rt=rTimeline;
+    rTimeline=function(){
+      _rt.apply(this,arguments);
+      try{
+        var el=document.getElementById('s-timeline'); if(!el) return;
+        var ci=(S.checkins||[]).slice(); if(ci.length<2 || document.getElementById('v57-trend')) return;
+        var asc=ci.slice().reverse();
+        var dW=+(Number(asc[asc.length-1].weight)-Number(asc[0].weight)).toFixed(1);
+        var g=((S.user&&S.user.goalType)||'').toLowerCase();
+        var quiereBajar=/definir|marcar|grasa|bajar/.test(g), quiereSubir=/músculo|musculo|ganar/.test(g);
+        var bien = quiereBajar? dW<0 : quiereSubir? dW>0 : Math.abs(dW)<1;
+        var arrow = dW<0?'↓':dW>0?'↑':'→';
+        var col = bien?'#33e08a':(dW===0?'#ffa64d':'#ff6b81');
+        var msg = quiereBajar?(dW<0?'Bajando — vas bien para definir':dW>0?'Subiendo — revisa, tu meta es bajar':'Estable — necesitas déficit para bajar')
+                : quiereSubir?(dW>0?'Subiendo — vas bien para ganar músculo':dW<0?'Bajando — revisa, tu meta es subir':'Estable — necesitas superávit para subir')
+                : 'Peso '+(dW>0?'+':'')+dW+'kg';
+        var d=document.createElement('div'); d.id='v57-trend'; d.className='card'; d.style.marginTop='16px';
+        d.innerHTML='<div style="display:flex;align-items:center;gap:12px;">'
+          +'<div style="font-size:30px;font-weight:800;color:'+col+';line-height:1;">'+arrow+'</div>'
+          +'<div><div style="font-size:15px;font-weight:800;color:var(--t1);">'+(dW>0?'+':'')+dW+' kg</div>'
+          +'<div style="font-size:11.5px;color:'+col+';margin-top:2px;">'+msg+'</div></div></div>';
+        el.appendChild(d);
+      }catch(e){ console.warn('[v57 trend]',e); }
+    };
+  }
+
+  try{ APP_VERSION="v57"; APP_BUILD="2026-08-20";
+    var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+  }catch(e){}
 })();
 
 </script>
