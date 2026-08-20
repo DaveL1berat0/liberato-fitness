@@ -7818,6 +7818,114 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
   }catch(e){}
 })();
 
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V54 — GEMINI (Google AI Studio) COMO PROVEEDOR (GRATIS)
+   Key AQ./AIza → gemini. Formato propio (contents/parts, key en la URL).
+   Gemini 3.x "piensa" → maxOutputTokens con margen (~+900). Multimodal:
+   visión con inlineData. Se integra al failover (v53): si falla, otra IA.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v54) return; window.__v54=true;
+  var GEM='gemini-3.6-flash';
+
+  var _oProv=_getProvider;
+  _getProvider=function(){
+    if(typeof _AKEY!=='undefined' && _AKEY && (_AKEY.indexOf('AIza')===0 || _AKEY.indexOf('AQ.')===0)) return 'gemini';
+    return _oProv.apply(this,arguments);
+  };
+
+  var _oCfg=_getApiConfig;
+  _getApiConfig=function(){
+    if(_getProvider()==='gemini'){
+      return { url:'https://generativelanguage.googleapis.com/v1beta/models/'+GEM+':generateContent?key='+encodeURIComponent(_AKEY),
+        headers:{'Content-Type':'application/json'}, model:GEM, fmt:'gemini' };
+    }
+    return _oCfg.apply(this,arguments);
+  };
+
+  var _oVM=_getVisionModel;
+  _getVisionModel=function(){ if(_getProvider()==='gemini') return GEM; return _oVM.apply(this,arguments); };
+
+  function _msgsToGemini(msgs){
+    var contents=[];
+    (msgs||[]).forEach(function(m){
+      var parts=[];
+      if(typeof m.content==='string'){ parts.push({text:m.content}); }
+      else if(Array.isArray(m.content)){
+        m.content.forEach(function(b){
+          if(b.type==='text') parts.push({text:b.text});
+          else if(b.type==='image'&&b.source&&b.source.type==='base64') parts.push({inlineData:{mimeType:b.source.media_type,data:b.source.data}});
+          else if(b.type==='image_url'&&b.image_url){ var u=b.image_url.url||''; parts.push({inlineData:{mimeType:(u.split(';')[0].split(':')[1])||'image/jpeg',data:u.split(',')[1]||''}}); }
+        });
+      }
+      if(parts.length) contents.push({role:(m.role==='assistant'?'model':'user'), parts:parts});
+    });
+    return contents;
+  }
+
+  var _oBuild=_buildBody;
+  _buildBody=function(msgs, maxTok, sysPrompt){
+    if(_getProvider()==='gemini'){
+      var sys=sysPrompt||'';
+      if(sys && /Coach AI/.test(sys) && typeof window._EVID==='string'){ sys += ' '+window._EVID; }
+      var body={ contents:_msgsToGemini(msgs), generationConfig:{ maxOutputTokens:Math.max((maxTok||0)+900,1200) } };
+      if(sys) body.systemInstruction={parts:[{text:sys}]};
+      return JSON.stringify(body);
+    }
+    return _oBuild.apply(this,arguments);
+  };
+
+  var _oParse=_parseAiResponse;
+  _parseAiResponse=function(data){
+    if(data && data.candidates && data.candidates[0]){
+      var cont=data.candidates[0].content||{}; var parts=cont.parts||[];
+      var t=parts.map(function(p){return p.text||'';}).join('');
+      if(t) return t;
+    }
+    return _oParse.apply(this,arguments);
+  };
+
+  /* visión multi-imagen con gemini (mantiene otros proveedores + failover) */
+  var _oVis=_aiCallVisionMulti;
+  _aiCallVisionMulti=async function(prompt, maxTokens, images){
+    if(_getProvider()!=='gemini') return _oVis.apply(this,arguments);
+    if(!_AKEY){ notif('API Key no configurada','Configura tu key','🔑'); return null; }
+    var parts=[{text:prompt}];
+    (images||[]).forEach(function(im){ parts.push({inlineData:{mimeType:im.mime,data:im.b64}}); });
+    var body={ contents:[{role:'user',parts:parts}], generationConfig:{ maxOutputTokens:Math.max((maxTokens||0)+1000,1600) } };
+    var cfg=_getApiConfig();
+    var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+    var to=ctrl?setTimeout(function(){try{ctrl.abort();}catch(e){}},50000):null;
+    try{
+      var res=await fetch(cfg.url,{method:'POST',headers:cfg.headers,body:JSON.stringify(body),signal:ctrl?ctrl.signal:undefined});
+      if(to)clearTimeout(to);
+      var data=await res.json();
+      if(!res.ok) throw new Error((data.error&&data.error.message)||('HTTP '+res.status));
+      return _parseAiResponse(data)||'';
+    }catch(e){ if(to)clearTimeout(to); if(e&&e.name==='AbortError') throw new Error('La IA tardó demasiado.'); throw e; }
+  };
+
+  try{ APP_VERSION="v54"; APP_BUILD="2026-08-20";
+    var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+  }catch(e){}
+})();
+
+
+/* V54b — instrucciones ÉLITE (mejor de lo mejor); aplica a TODOS los proveedores */
+(function(){ try{
+  window._EVID='Eres el mejor coach personal de Dave: nivel ÉLITE, basado en EVIDENCIA de primera línea '
+    +'(fisiología del ejercicio y nutrición deportiva revisadas por pares: meta-análisis recientes, líneas Schoenfeld/Helms/Israetel/ACSM y literatura de Harvard/Stanford). '
+    +'Da SIEMPRE lo mejor de lo mejor, priorizando lo que MÁS acerca a Dave a su objetivo por unidad de tiempo. '
+    +'Principios: sobrecarga progresiva medible; frecuencia 2x/semana por músculo; proximidad al fallo (RIR 0-3, autorregulación por RPE); '
+    +'volumen individualizado (empezar ~10 series/músculo/semana y ajustar según recuperación); rangos por fase (fuerza 3-6, hipertrofia 6-12, metabólico 15-20); '
+    +'proteína 1.6-2.2 g/kg repartida; carbohidratos alrededor del entreno; déficit/superávit moderado según objetivo; '
+    +'sueño 7-9h y gestión del estrés como multiplicadores; adherencia > perfección (planes sostenibles y realistas). '
+    +'Personaliza a los datos REALES de Dave (peso, grasa, progreso, restricciones: sin gluten/gastritis) y sé concreto, directo y accionable — sin relleno. '
+    +'Explica el PORQUÉ breve cuando ayude a decidir. Viene de tu conocimiento entrenado, no de búsqueda en vivo; si algo es incierto o individual, dilo con honestidad. No es consejo médico.';
+}catch(e){} })();
+
 </script>
 
   <button id="ai-chat-btn" onclick="toggleChat()" title="Coach AI">&#x1F4AC;</button>
