@@ -1097,6 +1097,7 @@ button:disabled,.btn:disabled,.disabled{ opacity:.4 !important; pointer-events:n
     
   
   <div id="s-nutrition" class="mt24" style="padding-bottom:60px;"></div>
+  <div id="s-habits" class="mt24" style="padding-bottom:90px;"></div>
 </div></div>
     
       <div class="lt"><div class="lti" id="lti"></div></div>
@@ -4813,7 +4814,8 @@ _aiCallVision=async function(prompt, maxTokens, b64, mime){
     {ic:'📷',lb:'Cuerpo',    t:'s-body'},
     {ic:'🏋️',lb:'Entreno',  t:'s-training'},
     {ic:'🍎',lb:'Dieta',     t:'s-nutrition'},
-    {ic:'📈',lb:'Progreso',  t:'s-timeline'}
+    {ic:'📈',lb:'Progreso',  t:'s-timeline'},
+    {ic:'✅',lb:'Hábitos',   t:'s-habits'}
   ];
   function build(){
     if(document.getElementById('v30-nav')) return;
@@ -4993,7 +4995,8 @@ var APP_BUILD="2026-08-17";
     's-body':'<svg viewBox="0 0 24 24" '+S_+'><circle cx="12" cy="6" r="3.2"/><path d="M5.5 20.5c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5"/></svg>',
     's-nutrition':'<svg viewBox="0 0 24 24" '+S_+'><path d="M7 3v6c0 1.2-1 1.6-1 2.8V21"/><path d="M5 3v4M9 3v4"/><path d="M16.5 3C15 3 14 5.2 14 7.7S15.4 12 16.5 12v9"/></svg>',
     's-training':'<svg viewBox="0 0 24 24" '+S_+'><path d="M3 9v6M6 7.5v9M18 7.5v9M21 9v6M6.5 12h11"/></svg>',
-    's-timeline':'<svg viewBox="0 0 24 24" '+S_+'><path d="M4 4v16h16"/><path d="M7.5 14.5l3.2-3.8 3 2.4L20 7"/></svg>'
+    's-timeline':'<svg viewBox="0 0 24 24" '+S_+'><path d="M4 4v16h16"/><path d="M7.5 14.5l3.2-3.8 3 2.4L20 7"/></svg>',
+    's-habits':'<svg viewBox="0 0 24 24" '+S_+'><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>'
   };
   function swap(){
     var nav=document.getElementById('v30-nav'); if(!nav) return false;
@@ -8438,6 +8441,245 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
   }
 
   try{ APP_VERSION="v60"; APP_BUILD="2026-08-20";
+    var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+  }catch(e){}
+})();
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V61 — HÁBITOS (Fase 1): checklist diario por bloques del día ordenados por
+   la mejor hora según evidencia (circadiano/absorción/sueño). ✓ al tocar,
+   rachas 🔥 por hábito + racha global, reset diario automático (clave por día
+   local) e historial de 14 días. Estado propio S.habits persistido en pf1x
+   (no toca meals/scan/foodLog/workoutLog). Push a Apple Watch = Fase 2.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v61) return; window.__v61=true;
+
+  /* fecha LOCAL (el día voltea a medianoche local, no UTC) */
+  function _hkey(off){ var d=new Date(); if(off) d.setDate(d.getDate()-off);
+    return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+
+  var BLOCKS=[
+    {id:'wake', ic:'🌅', name:'Al despertar', time:'6:30–7:00', items:[
+      {id:'agua',     ic:'💧', name:'Hidrátate',           why:'Rehidrata tras 7-8h de sueño'},
+      {id:'sol',      ic:'☀️', name:'Toma sol 5–10 min',   why:'Ancla tu ritmo circadiano → mejor sueño hoy'},
+      {id:'multi',    ic:'💊', name:'Multivitamina',       why:'Con el desayuno (mejor absorción)'},
+      {id:'creatina', ic:'⚡', name:'Creatina',            why:'Diaria; lo que manda es la constancia'}
+    ]},
+    {id:'train', ic:'🏋️', name:'Entreno · mañana', time:'AM', items:[
+      {id:'pesas',  ic:'🏋️', name:'Pesas',  why:'Mín. 3×/semana'},
+      {id:'cardio', ic:'🏃', name:'Cardio', why:'Mín. 3×/semana'}
+    ]},
+    {id:'noon', ic:'🥗', name:'Mediodía', time:'12–1 PM', items:[
+      {id:'omega',   ic:'🐟', name:'Omega 3',             why:'Con el almuerzo (grasa = absorción)'},
+      {id:'aprende', ic:'🧠', name:'Aprende algo difícil', why:'Tu pico de foco del día'}
+    ]},
+    {id:'eve', ic:'🌆', name:'Tarde / Noche', time:'', items:[
+      {id:'leer',    ic:'📖', name:'Lee 10+ min',        why:'Desconecta de pantallas'},
+      {id:'meditar', ic:'🧘', name:'Medita 10+ min',     why:'Baja cortisol, activa el descanso'},
+      {id:'cena',    ic:'🍽️', name:'Cena antes de 7 PM', why:'Mejor glucosa, digestión y sueño'}
+    ]},
+    {id:'sleep', ic:'🌙', name:'Antes de dormir', time:'10:30–11 PM', items:[
+      {id:'magzinc',   ic:'🌙', name:'Magnesio & Zinc',           why:'Relajación y recuperación'},
+      {id:'oscuridad', ic:'🌑', name:'Duerme en total oscuridad', why:'Maximiza la melatonina'},
+      {id:'lado',      ic:'🛌', name:'Duerme de lado',            why:'Favorece el drenaje glinfático'}
+    ]}
+  ];
+  var ALL=[]; BLOCKS.forEach(function(b){ b.items.forEach(function(it){ ALL.push(it); }); });
+  var TOTAL=ALL.length;
+
+  /* estado + persistencia (patrón pf1x) */
+  try{ var x=JSON.parse(localStorage.getItem('pf1x')||'null'); if(x&&x.habits) S.habits=x.habits; }catch(e){}
+  if(!S.habits || typeof S.habits!=='object') S.habits={days:{}};
+  if(!S.habits.days) S.habits.days={};
+  (function(){ var _s=Store.save; Store.save=function(){ var r=_s.apply(this,arguments);
+    try{ var c=JSON.parse(localStorage.getItem('pf1x')||'{}'); c.habits=S.habits||null; localStorage.setItem('pf1x',JSON.stringify(c)); }catch(e){} return r; }; })();
+
+  function _day(k){ return (S.habits.days&&S.habits.days[k])||{}; }
+  function _doneToday(id){ return !!_day(_hkey(0))[id]; }
+  function _countDay(k){ var d=_day(k),n=0; for(var i=0;i<ALL.length;i++){ if(d[ALL[i].id]) n++; } return n; }
+
+  /* racha por hábito: días consecutivos hacia atrás; hoy pendiente NO rompe */
+  function _streak(id){ var start=_day(_hkey(0))[id]?0:1, n=0;
+    for(var off=start; off<400; off++){ if(_day(_hkey(off))[id]) n++; else break; } return n; }
+  /* racha global: días consecutivos con ≥1 hábito hecho */
+  function _globalStreak(){ var start=_countDay(_hkey(0))>0?0:1, n=0;
+    for(var off=start; off<400; off++){ if(_countDay(_hkey(off))>0) n++; else break; } return n; }
+
+  window.toggleHabit=function(id){
+    try{
+      var k=_hkey(0);
+      if(!S.habits.days[k]) S.habits.days[k]={};
+      if(S.habits.days[k][id]){ delete S.habits.days[k][id]; }
+      else { S.habits.days[k][id]=true; if(navigator.vibrate){ try{navigator.vibrate(12);}catch(_){} } }
+      Store.save();
+      renderHabits();
+    }catch(e){}
+  };
+
+  window.renderHabits=function(){
+    var el=document.getElementById('s-habits'); if(!el) return;
+    var done=_countDay(_hkey(0)), pct=TOTAL?Math.round(done/TOTAL*100):0, gs=_globalStreak();
+
+    var strip='';
+    for(var i=13;i>=0;i--){ var c=_countDay(_hkey(i)); var op=c===0?0.08:(0.25+0.75*(c/TOTAL));
+      strip+='<div title="'+_hkey(i)+': '+c+'/'+TOTAL+'" style="flex:1;height:22px;border-radius:4px;background:var(--green);opacity:'+op.toFixed(2)+';"></div>'; }
+
+    var head='<div class="sh"><div><div class="st">Hábitos</div>'
+      +'<div class="ss">Rutina diaria óptima · basada en evidencia</div></div>'
+      +'<div class="mchip'+(gs>0?' done':'')+'" style="align-self:flex-start;"><span class="mchip-ic">🔥</span><span class="mchip-lb">'+gs+(gs===1?' día':' días')+'</span></div></div>';
+
+    var top='<div class="card" style="padding:16px;margin-bottom:14px;">'
+      +'<div class="pw"><div class="ph2"><span class="pn">Hoy</span><span class="pv">'+done+'/'+TOTAL+'</span></div>'
+      +'<div class="pb"><div class="pf" style="width:'+pct+'%;background:var(--grad-cool);"></div></div></div>'
+      +'<div style="display:flex;gap:3px;margin-top:14px;">'+strip+'</div>'
+      +'<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:9px;color:var(--t3);font-family:var(--mono);letter-spacing:1px;"><span>HACE 14 DÍAS</span><span>HOY</span></div></div>';
+
+    var body=BLOCKS.map(function(b){
+      var rows=b.items.map(function(it){
+        var on=_doneToday(it.id), s=_streak(it.id);
+        return '<div class="hb-row'+(on?' on':'')+'" onclick="toggleHabit(\''+it.id+'\')">'
+          +'<div class="hb-ck">'+(on?'✓':'')+'</div>'
+          +'<div class="hb-tx"><div class="hb-nm">'+it.ic+' '+it.name+'</div>'+(it.why?'<div class="hb-why">'+it.why+'</div>':'')+'</div>'
+          +(s>=2?'<div class="hb-fl">🔥'+s+'</div>':'')+'</div>';
+      }).join('');
+      return '<div class="card" style="padding:14px 16px;margin-bottom:12px;">'
+        +'<div class="hb-blockh"><div class="hb-bt">'+b.ic+' '+b.name+'</div>'+(b.time?'<div class="hb-btime">'+b.time+'</div>':'')+'</div>'+rows+'</div>';
+    }).join('');
+
+    el.innerHTML=head+top+body;
+  };
+
+  /* estilos propios de la sección */
+  try{
+    if(!document.getElementById('hb-css')){
+      var st=document.createElement('style'); st.id='hb-css';
+      st.textContent='#s-habits .hb-blockh{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}'
+        +'#s-habits .hb-bt{font-size:13px;font-weight:800;color:var(--t1);}'
+        +'#s-habits .hb-btime{font-size:10px;color:var(--t3);font-family:var(--mono);letter-spacing:1px;}'
+        +'#s-habits .hb-row{display:flex;align-items:center;gap:12px;padding:11px 2px;border-top:1px solid var(--border);cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none;}'
+        +'#s-habits .hb-row:first-of-type{border-top:none;}'
+        +'#s-habits .hb-ck{flex:0 0 26px;width:26px;height:26px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:transparent;transition:all .2s var(--ease);}'
+        +'#s-habits .hb-row.on .hb-ck{background:var(--grad-cool);border-color:transparent;color:#04120c;}'
+        +'#s-habits .hb-row:active .hb-ck{transform:scale(.88);}'
+        +'#s-habits .hb-tx{flex:1;min-width:0;}'
+        +'#s-habits .hb-nm{font-size:14px;color:var(--t1);font-weight:600;}'
+        +'#s-habits .hb-row.on .hb-nm{color:var(--t2);}'
+        +'#s-habits .hb-why{font-size:11px;color:var(--t3);margin-top:2px;line-height:1.3;}'
+        +'#s-habits .hb-fl{flex:0 0 auto;font-size:11px;color:var(--orange);font-family:var(--mono);font-weight:700;white-space:nowrap;}';
+      document.head.appendChild(st);
+    }
+  }catch(e){}
+
+  /* wiring: render en init + inmediato + DOMContentLoaded */
+  try{ var _ip=window.initPage||initPage;
+    window.initPage=function(){ var r=_ip.apply(this,arguments); try{ renderHabits(); }catch(e){} return r; };
+  }catch(e){}
+  try{ if(document.getElementById('s-habits')) renderHabits(); }catch(e){}
+  try{ document.addEventListener('DOMContentLoaded', function(){ try{ renderHabits(); }catch(e){} }); }catch(e){}
+
+  try{ APP_VERSION="v61"; APP_BUILD="2026-09-08";
+    var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+  }catch(e){}
+})();
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V62 — HÁBITOS Fase 2: WEB PUSH (recordatorios al Apple Watch).
+   Registra sw.js, pide permiso, se suscribe con VAPID y envía la suscripción
+   a Supabase (proyecto liberato-fitness · funciones subscribe/send-reminders
+   + cron 4×/día en hora RD). El disparo programado vive en Supabase; el
+   iPhone muestra la notificación e iOS la refleja en el Apple Watch.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v62) return; window.__v62=true;
+
+  var SUPA_FN='https://pomyrtujdabwgjahkqis.supabase.co/functions/v1';
+  var FIT_KEY='3b474478c43b4d09b572ecb432d73425';
+  var VAPID_PUBLIC='BKdjOszROmsys2VtUJ1eSJ4EWyZKzH-5HBBVV7uIh18u4eR7gKK95lNQGTLHjiA-ezwKOPreKl5Y8YChECr9xBc';
+
+  function _b64ToU8(base64){
+    var pad='='.repeat((4-base64.length%4)%4);
+    var b64=(base64+pad).replace(/-/g,'+').replace(/_/g,'/');
+    var raw=atob(b64), out=new Uint8Array(raw.length);
+    for(var i=0;i<raw.length;i++) out[i]=raw.charCodeAt(i);
+    return out;
+  }
+  function _canPush(){ return ('serviceWorker' in navigator) && ('PushManager' in window) && (typeof Notification!=='undefined'); }
+  function _standalone(){ try{ return (window.navigator.standalone===true) || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches); }catch(e){ return false; } }
+  function _notifOn(){ try{ return typeof Notification!=='undefined' && Notification.permission==='granted' && localStorage.getItem('_notif_on')==='1'; }catch(e){ return false; } }
+
+  /* registrar el SW cuanto antes para tenerlo listo */
+  try{ if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(function(){}); } }catch(e){}
+
+  window.activarNotis=async function(){
+    try{
+      if(!_canPush()){ alert('Tu navegador no soporta notificaciones push aquí.'); return; }
+      if(!_standalone()){ alert('Para recibir recordatorios, abre la app desde el ícono en tu pantalla de inicio (no desde Safari).'); return; }
+      var perm=await Notification.requestPermission();
+      if(perm!=='granted'){ alert('Sin permiso de notificaciones no puedo enviarte los recordatorios. Puedes activarlo en Ajustes.'); if(window.renderHabits)renderHabits(); return; }
+      var reg=await navigator.serviceWorker.register('sw.js');
+      await navigator.serviceWorker.ready;
+      var sub=await reg.pushManager.getSubscription();
+      if(!sub){ sub=await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:_b64ToU8(VAPID_PUBLIC) }); }
+      var j=sub.toJSON();
+      var res=await fetch(SUPA_FN+'/subscribe',{ method:'POST', headers:{'content-type':'application/json','x-fit-key':FIT_KEY}, body:JSON.stringify({ endpoint:j.endpoint, keys:j.keys, ua:navigator.userAgent }) });
+      if(res.ok){ try{localStorage.setItem('_notif_on','1');}catch(e){} if(window.renderHabits)renderHabits(); alert('¡Listo! Te llegarán los recordatorios a tu Apple Watch a cada bloque del día.'); }
+      else { alert('No se pudo activar (servidor). Intenta de nuevo en un momento.'); }
+    }catch(e){ alert('No se pudo activar: '+((e&&e.message)||e)); }
+  };
+
+  window.desactivarNotis=async function(){
+    try{
+      try{ localStorage.removeItem('_notif_on'); }catch(e){}
+      if('serviceWorker' in navigator){ var reg=await navigator.serviceWorker.getRegistration(); if(reg){ var sub=await reg.pushManager.getSubscription(); if(sub) await sub.unsubscribe(); } }
+      if(window.renderHabits)renderHabits();
+      alert('Recordatorios desactivados.');
+    }catch(e){ if(window.renderHabits)renderHabits(); }
+  };
+
+  function _notifCardHTML(){
+    if(_notifOn()){
+      return '<div id="hb-notif" class="card" style="padding:14px 16px;margin-bottom:14px;">'
+        +'<div style="display:flex;align-items:center;gap:10px;">'
+        +'<span style="font-size:18px;">🔔</span>'
+        +'<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:var(--green);">Recordatorios activos</div>'
+        +'<div style="font-size:11px;color:var(--t3);">Al Apple Watch: mañana · mediodía · tarde · noche</div></div>'
+        +'<button onclick="desactivarNotis()" style="background:transparent;border:1px solid var(--border);color:var(--t3);border-radius:10px;padding:7px 12px;font-size:11px;font-family:var(--mono);cursor:pointer;">Desactivar</button>'
+        +'</div></div>';
+    }
+    var hint=(!_standalone())?'<div style="font-size:11px;color:var(--orange);margin-top:8px;">Ábrela desde el ícono de tu pantalla de inicio para activarlas.</div>':'';
+    return '<div id="hb-notif" class="card" style="padding:14px 16px;margin-bottom:14px;">'
+      +'<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">'
+      +'<span style="font-size:18px;">🔔</span>'
+      +'<div style="flex:1;min-width:150px;"><div style="font-size:13px;font-weight:700;color:var(--t1);">Recordatorios en tu Apple Watch</div>'
+      +'<div style="font-size:11px;color:var(--t3);">Un aviso por bloque del día, a su mejor hora</div></div>'
+      +'<button onclick="activarNotis()" style="background:linear-gradient(120deg,#8b5cff,#ff2d95,#ff7a1a);color:#fff;border:none;border-radius:12px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;">Activar</button>'
+      +'</div>'+hint+'</div>';
+  }
+  function _injectNotif(){
+    try{
+      var el=document.getElementById('s-habits'); if(!el) return;
+      var old=document.getElementById('hb-notif'); if(old) old.remove();
+      var cards=el.querySelectorAll('.card');
+      var tmp=document.createElement('div'); tmp.innerHTML=_notifCardHTML();
+      var card=tmp.firstChild;
+      if(cards.length){ cards[0].parentNode.insertBefore(card, cards[0].nextSibling); }
+      else el.appendChild(card);
+    }catch(e){}
+  }
+
+  /* envolver renderHabits para inyectar la tarjeta en cada re-render */
+  try{
+    if(window.renderHabits){
+      var _rh=window.renderHabits;
+      window.renderHabits=function(){ var r=_rh.apply(this,arguments); _injectNotif(); return r; };
+      if(document.getElementById('s-habits')) window.renderHabits();
+    }
+  }catch(e){}
+
+  try{ APP_VERSION="v62"; APP_BUILD="2026-09-08";
     var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
   }catch(e){}
 })();
