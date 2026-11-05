@@ -8784,6 +8784,96 @@ try{ APP_VERSION="v40"; APP_BUILD="2026-08-19";
   }catch(e){}
 })();
 
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V64 — FOTO REAL + MÚSCULO por ejercicio en la Rutina.
+   Fuente: free-exercise-db (libre) vía jsDelivr CDN. URLs verificadas (200).
+   Post-procesa las filas que renderiza rTrain (no reescribe su lógica):
+   preserva el botón de registrar, volumen, protocolo y regenerar.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  if(window.__v64) return; window.__v64=true;
+  var EXB='https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/';
+  function _exNorm(s){ try{ return (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim(); }catch(e){ return (s||'').toLowerCase(); } }
+  var EXMAP=[
+    ['peso muerto rumano','Romanian_Deadlift/0.jpg'],['rumano','Romanian_Deadlift/0.jpg'],['peso muerto','Barbell_Deadlift/0.jpg'],
+    ['press inclinado','Incline_Dumbbell_Press/0.jpg'],['inclinado','Incline_Dumbbell_Press/0.jpg'],
+    ['press de banca','Barbell_Bench_Press_-_Medium_Grip/0.jpg'],['press banca','Barbell_Bench_Press_-_Medium_Grip/0.jpg'],['press de pecho','Barbell_Bench_Press_-_Medium_Grip/0.jpg'],['banca','Barbell_Bench_Press_-_Medium_Grip/0.jpg'],
+    ['press militar','Standing_Military_Press/0.jpg'],['militar','Standing_Military_Press/0.jpg'],['press de hombro','Dumbbell_Shoulder_Press/0.jpg'],['press hombro','Dumbbell_Shoulder_Press/0.jpg'],
+    ['apertura','Dumbbell_Flyes/0.jpg'],['fondos','Bench_Dips/0.jpg'],['flexion','Pushups/0.jpg'],['lagartija','Pushups/0.jpg'],
+    ['sentadilla bulgara','Split_Squats/0.jpg'],['bulgara','Split_Squats/0.jpg'],['sentadilla','Barbell_Full_Squat/0.jpg'],
+    ['prensa','Leg_Press/0.jpg'],['zancada','Dumbbell_Lunges/0.jpg'],['desplante','Dumbbell_Lunges/0.jpg'],['lunge','Dumbbell_Lunges/0.jpg'],
+    ['extension de cuadriceps','Leg_Extensions/0.jpg'],['cuadriceps','Leg_Extensions/0.jpg'],['extension de pierna','Leg_Extensions/0.jpg'],
+    ['curl femoral','Lying_Leg_Curls/0.jpg'],['femoral','Lying_Leg_Curls/0.jpg'],['isquio','Lying_Leg_Curls/0.jpg'],
+    ['hip thrust','Barbell_Glute_Bridge/0.jpg'],['empuje de cadera','Barbell_Glute_Bridge/0.jpg'],['gluteo','Barbell_Glute_Bridge/0.jpg'],
+    ['pantorrilla','Standing_Calf_Raises/0.jpg'],['gemelo','Standing_Calf_Raises/0.jpg'],
+    ['dominada','Pullups/0.jpg'],['pull up','Pullups/0.jpg'],['pullup','Pullups/0.jpg'],['jalon','Wide-Grip_Lat_Pulldown/0.jpg'],
+    ['remo con mancuerna','One-Arm_Dumbbell_Row/0.jpg'],['remo mancuerna','One-Arm_Dumbbell_Row/0.jpg'],['remo en polea','Seated_Cable_Rows/0.jpg'],['remo sentado','Seated_Cable_Rows/0.jpg'],['remo','Bent_Over_Barbell_Row/0.jpg'],
+    ['elevaciones laterales','Side_Lateral_Raise/0.jpg'],['elevacion lateral','Side_Lateral_Raise/0.jpg'],['lateral','Side_Lateral_Raise/0.jpg'],
+    ['elevaciones frontales','Front_Dumbbell_Raise/0.jpg'],['frontal','Front_Dumbbell_Raise/0.jpg'],
+    ['face pull','Face_Pull/0.jpg'],['pajaro','Reverse_Flyes/0.jpg'],['posterior','Reverse_Flyes/0.jpg'],
+    ['encogimiento','Dumbbell_Shrug/0.jpg'],['trapecio','Dumbbell_Shrug/0.jpg'],
+    ['curl martillo','Alternate_Hammer_Curl/0.jpg'],['martillo','Alternate_Hammer_Curl/0.jpg'],
+    ['curl de biceps con barra','Barbell_Curl/0.jpg'],['curl con barra','Barbell_Curl/0.jpg'],['curl de biceps','Dumbbell_Bicep_Curl/0.jpg'],['curl biceps','Dumbbell_Bicep_Curl/0.jpg'],['biceps','Dumbbell_Bicep_Curl/0.jpg'],
+    ['extension de triceps','Triceps_Pushdown/0.jpg'],['triceps','Triceps_Pushdown/0.jpg'],['pushdown','Triceps_Pushdown/0.jpg'],['frances','Triceps_Pushdown/0.jpg'],['copa','Triceps_Pushdown/0.jpg'],
+    ['plancha','Plank/0.jpg'],['plank','Plank/0.jpg'],['crunch','Crunches/0.jpg'],['abdominal','Crunches/0.jpg'],['encogimiento abdominal','Crunches/0.jpg'],
+    ['elevacion de piernas','Hanging_Leg_Raise/0.jpg'],['elevacion de rodillas','Hanging_Leg_Raise/0.jpg'],['russian','Russian_Twist/0.jpg'],['giro ruso','Russian_Twist/0.jpg'],
+    ['curl','Dumbbell_Bicep_Curl/0.jpg']
+  ];
+  var EXCAT={chest:'Barbell_Bench_Press_-_Medium_Grip/0.jpg',pecho:'Barbell_Bench_Press_-_Medium_Grip/0.jpg',back:'Bent_Over_Barbell_Row/0.jpg',espalda:'Bent_Over_Barbell_Row/0.jpg',lats:'Bent_Over_Barbell_Row/0.jpg',shoulders:'Dumbbell_Shoulder_Press/0.jpg',hombros:'Dumbbell_Shoulder_Press/0.jpg',biceps:'Dumbbell_Bicep_Curl/0.jpg',triceps:'Triceps_Pushdown/0.jpg',arms:'Dumbbell_Bicep_Curl/0.jpg',brazos:'Dumbbell_Bicep_Curl/0.jpg',quads:'Barbell_Full_Squat/0.jpg',legs:'Barbell_Full_Squat/0.jpg',piernas:'Barbell_Full_Squat/0.jpg',hamstrings:'Lying_Leg_Curls/0.jpg',glutes:'Barbell_Glute_Bridge/0.jpg',calves:'Standing_Calf_Raises/0.jpg',core:'Plank/0.jpg',abs:'Plank/0.jpg'};
+  function _exPhoto(name,cat){
+    var n=_exNorm(name);
+    for(var i=0;i<EXMAP.length;i++){ if(n.indexOf(EXMAP[i][0])>=0) return EXB+EXMAP[i][1]; }
+    var c=_exNorm(cat); if(EXCAT[c]) return EXB+EXCAT[c];
+    return null;
+  }
+  window._exPhoto=_exPhoto;
+  var MUS={Chest:'Pecho',Back:'Espalda',Lats:'Espalda',Shoulders:'Hombros',Biceps:'Bíceps',Triceps:'Tríceps',Arms:'Brazos',Quads:'Cuádriceps',Hamstrings:'Femoral',Glutes:'Glúteo',Legs:'Piernas',Calves:'Pantorrilla',Core:'Core',Abs:'Core',Cardio:'Cardio'};
+
+  /* CSS del thumbnail */
+  try{ if(!document.getElementById('v64-css')){ var st=document.createElement('style'); st.id='v64-css';
+    st.textContent='.exthumb{position:relative;width:54px;height:54px;border-radius:12px;flex-shrink:0;overflow:hidden;border:1px solid var(--border);'
+      +'background:linear-gradient(135deg,#241640,#150e29);display:flex;align-items:center;justify-content:center;}'
+      +'.exthumb::before{content:"🏋️";font-size:20px;opacity:.45;}'
+      +'.exthumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#0e0a1a;}';
+    document.head.appendChild(st);
+  } }catch(e){}
+
+  function _v64Photos(){
+    try{
+      var el=document.getElementById('s-training'); if(!el) return;
+      var days=(typeof getActiveDays==='function')?getActiveDays():[];
+      var catOf={}; days.forEach(function(d){ (d.ex||[]).forEach(function(x){ if(x&&x.nm) catOf[_exNorm(x.nm)]=x.cat||''; }); });
+      var rows=el.querySelectorAll('div');
+      for(var i=0;i<rows.length;i++){
+        var r=rows[i]; if(r._v64) continue;
+        var sstyle=r.getAttribute('style')||'';
+        if(sstyle.indexOf('justify-content:space-between')<0 || sstyle.indexOf('border-top:1px solid rgba(255,255,255,.05)')<0) continue;
+        if(r.children.length!==2 || r.children[0].tagName!=='SPAN') continue;
+        var name=(r.children[0].textContent||'').trim(); if(!name) continue;
+        var setsTxt=(r.children[1].textContent||'').trim();
+        var cat=catOf[_exNorm(name)]||''; var ph=_exPhoto(name,cat); var mus=MUS[cat]||'';
+        r._v64=1; r.style.gap='12px'; r.style.padding='10px 0'; r.style.alignItems='center';
+        r.innerHTML='<div class="exthumb">'+(ph?'<img src="'+ph+'" loading="lazy" onerror="this.remove()">':'')+'</div>'
+          +'<div style="flex:1;min-width:0;"><div style="font-size:13px;color:var(--t1);font-weight:600;line-height:1.25;">'+name+'</div>'
+          +(mus?'<div style="font-size:10.5px;color:var(--t3);margin-top:2px;">'+mus+'</div>':'')+'</div>'
+          +'<span style="font-size:11px;color:var(--t3);font-family:var(--mono);white-space:nowrap;">'+setsTxt+'</span>';
+      }
+    }catch(e){}
+  }
+  window._v64Photos=_v64Photos;
+
+  /* envolver rTrain para post-procesar tras cada render */
+  try{ var _rt=window.rTrain||rTrain;
+    window.rTrain=function(){ var r=_rt.apply(this,arguments); try{_v64Photos();}catch(e){} return r; };
+  }catch(e){}
+  try{ if(document.getElementById('s-training')) _v64Photos(); }catch(e){}
+
+  try{ APP_VERSION="v64"; APP_BUILD="2026-11-05";
+    var _vb=document.getElementById('v33-badge'); if(_vb) _vb.textContent=APP_VERSION+" · "+APP_BUILD;
+  }catch(e){}
+})();
+
 </script>
 
   <button id="ai-chat-btn" onclick="toggleChat()" title="Coach AI">&#x1F4AC;</button>
